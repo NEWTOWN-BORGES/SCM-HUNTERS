@@ -1,0 +1,141 @@
+/* Anti-Scam UI Styles */
+
+.as-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    margin-left: 10px;
+    font-size: 12px;
+    font-weight: bold;
+    color: white;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    border: 2px solid white;
+    z-index: 9999;
+}
+
+.as-badge-safe {
+    background-color: #2ecc71;
+}
+
+.as-badge-warning {
+    background-color: #f1c40f;
+}
+
+.as-badge-danger {
+    background-color: #e74c3c;
+}
+
+/* Tooltip container */
+.as-tooltip {
+    position: absolute;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 15px;
+    width: 250px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    z-index: 10000;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+    color: #333;
+    pointer-events: auto;
+}
+
+.as-tooltip-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 8px;
+}
+
+.as-tooltip-title {
+    font-weight: bold;
+    font-size: 15px;
+}
+
+.as-score {
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: white;
+}
+
+.as-tooltip-content {
+    margin-bottom: 15px;
+}
+
+.as-signal-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    font-size: 0.9em;
+    color: #666;
+}
+
+.as-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.as-btn {
+    flex: 1;
+    padding: 6px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.2s;
+}
+
+.as-btn-report {
+    background-color: #fee;
+    color: #c0392b;
+}
+
+.as-btn-report:hover {
+    background-color: #fdd;
+}
+
+.as-btn-reset {
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+.as-actions-title {
+    font-size: 11px;
+    font-weight: bold;
+    color: #666;
+    margin-bottom: 5px;
+    margin-top: 5px;
+}
+
+.as-actions {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 5px;
+}
+
+.as-btn {
+    flex: 1;
+    padding: 5px 4px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 10px;
+    transition: background 0.2s;
+}
+
+.as-btn-report {
+    background-color: #fee;
+    color: #c0392b;
+}
+
+.as-btn-report:hover {
+    background-color: #fdd;
+}

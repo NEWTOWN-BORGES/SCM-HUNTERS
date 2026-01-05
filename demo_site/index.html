@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo Imóveis - Teste Anti-Burla</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Demo Imóveis</h1>
+        <p>Ambiente de teste para detecção de fraudes</p>
+    </header>
+
+    <div class="container">
+        <!-- Anúncio Normal 1 -->
+        <article class="ad-card" data-id="101">
+            <div class="ad-image">Foto Sala T2</div>
+            <div class="ad-content">
+                <div class="ad-price">250.000 €</div>
+                <h2 class="ad-title">Apartamento T2 renovado no centro da cidade com varanda</h2>
+                <div class="ad-details">85 m² • 2 quarto • 1 wc</div>
+                <div class="ad-contact">
+                    <span class="seller-name">Imobiliária Confiança</span>
+                    <button class="contact-btn">Contactar</button>
+                </div>
+            </div>
+        </article>
+
+        <!-- Anúncio Suspeito 1 - Preço muito baixo -->
+        <article class="ad-card" data-id="102">
+            <div class="ad-image">Foto Mansão Luxo</div>
+            <div class="ad-content">
+                <div class="ad-price suspicious-price">45.000 €</div>
+                <h2 class="ad-title">Penthouse de luxo com vista mar T4 oportunidade única</h2>
+                <div class="ad-details">200 m² • 4 quarto • 3 wc</div>
+                <div class="ad-contact">
+                    <span class="seller-name">Particular (Urgente)</span>
+                    <button class="contact-btn">Contactar</button>
+                </div>
+            </div>
+        </article>
+
+        <!-- Anúncio Suspeito 2 - Título em inglês/estranho -->
+        <article class="ad-card" data-id="103">
+            <div class="ad-image">Foto Cozinha Genérica</div>
+            <div class="ad-content">
+                <div class="ad-price">600 €/mês</div>
+                <h2 class="ad-title">LOVELY APARTMENT FOR RENT KINDLY CONTACT EMAIL</h2>
+                <div class="ad-details">70 m² • 1 quarto • 1 wc</div>
+                <div class="ad-contact">
+                    <span class="seller-name">John Doe</span>
+                    <button class="contact-btn">Contactar</button>
+                </div>
+            </div>
+        </article>
+
+        <!-- Anúncio Normal 2 -->
+        <article class="ad-card" data-id="104">
+            <div class="ad-image">Foto Quarto T3</div>
+            <div class="ad-content">
+                <div class="ad-price">320.000 €</div>
+                <h2 class="ad-title">Moradia T3 em zona calma com jardim e garagem</h2>
+                <div class="ad-details">150 m² • 3 quarto • 2 wc</div>
+                <div class="ad-contact">
+                    <span class="seller-name">Ana Silva Mediação</span>
+                    <button class="contact-btn">Contactar</button>
+                </div>
+            </div>
+        </article>
+
+         <!-- Anúncio com ID Repetido (Simulando spam) -->
+         <article class="ad-card" data-id="102">
+            <div class="ad-image">Foto Mansão Luxo (Duplicado)</div>
+            <div class="ad-content">
+                <div class="ad-price suspicious-price">45.000 €</div>
+                <h2 class="ad-title">Penthouse de luxo com vista mar T4 oportunidade única</h2>
+                <div class="ad-details">200 m² • 4 quarto • 3 wc</div>
+                <div class="ad-contact">
+                    <span class="seller-name">Particular (Urgente)</span>
+                    <button class="contact-btn">Contactar</button>
+                </div>
+            </div>
+        </article>
+    </div>
+</body>
+</html>

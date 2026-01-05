@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            width: 300px;
+            padding: 15px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            background-color: #f9f9f9;
+        }
+        h2 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #2c3e50;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        .stats {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 15px;
+        }
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-weight: bold;
+            color: #3498db;
+        }
+        
+        .history-section {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .history-title {
+            font-size: 12px;
+            font-weight: bold;
+            color: #7f8c8d;
+            margin-bottom: 5px;
+        }
+        .history-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .history-item {
+            background: white;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 5px;
+            font-size: 11px;
+            border-left: 3px solid #ddd;
+        }
+        .history-item.suspicious { border-left-color: #e74c3c; }
+        .history-item.safe { border-left-color: #2ecc71; }
+        
+        footer {
+            margin-top: 15px;
+            font-size: 10px;
+            color: #aaa;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h2>🛡️ Anti-Scam Imobiliário</h2>
+    
+    <div class="stats">
+        <div class="stat-item">
+            <span>Monitorados:</span>
+            <span class="stat-value" id="total-ads">0</span>
+        </div>
+        <div class="stat-item">
+            <span>Fraudes:</span>
+            <span class="stat-value" id="fraud-ads" style="color: #e74c3c;">0</span>
+        </div>
+    </div>
+
+    <div class="history-section">
+        <div class="history-title">Últimos Visitados</div>
+        <ul class="history-list" id="history-list">
+            <!-- Items inseridos via JS -->
+        </ul>
+    </div>
+
+    <footer>
+        Versão 1.1 (Beta)
+    </footer>
+    <script src="popup.js"></script>
+</body>
+</html>

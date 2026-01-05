@@ -1,0 +1,110 @@
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f4f4f4;
+    margin: 0;
+    padding: 20px;
+}
+
+header {
+    background-color: #fff;
+    padding: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+h1 {
+    color: #333;
+    margin: 0;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.ad-card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: transform 0.2s;
+    overflow: hidden;
+    position: relative; /* For badge placement if needed */
+}
+
+.ad-card:hover {
+    transform: translateY(-5px);
+}
+
+.ad-image {
+    width: 100%;
+    height: 200px;
+    background-color: #ddd;
+    object-fit: cover;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    font-size: 0.9em;
+}
+
+.ad-content {
+    padding: 15px;
+}
+
+.ad-price {
+    font-size: 1.4em;
+    font-weight: bold;
+    color: #2c3e50;
+    margin-bottom: 10px;
+}
+
+.ad-title {
+    font-size: 1.1em;
+    color: #333;
+    margin-bottom: 10px;
+    line-height: 1.4;
+    height: 3em; /* limit to 2 lines */
+    overflow: hidden;
+}
+
+.ad-details {
+    font-size: 0.9em;
+    color: #666;
+    margin-bottom: 15px;
+}
+
+.ad-contact {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid #eee;
+    padding-top: 10px;
+}
+
+.contact-btn {
+    background-color: #e91e63;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.contact-btn:hover {
+    background-color: #d81b60;
+}
+
+.seller-name {
+    font-size: 0.9em;
+    color: #888;
+}
+
+/* Simulate suspicious elements */
+.suspicious-price {
+    color: #e74c3c;
+}

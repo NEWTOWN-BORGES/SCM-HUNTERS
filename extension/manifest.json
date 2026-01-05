@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Anti-Scam Imobiliário",
+  "version": "1.0",
+  "description": "Detecta e alerta sobre anúncios imobiliários suspeitos.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["modules/storage.js", "modules/ui.js", "modules/bot_detect.js", "content.js"],
+      "css": ["styles/content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Anti-Scam Status"
+  },
+  "icons": {
+      
+  }
+}
