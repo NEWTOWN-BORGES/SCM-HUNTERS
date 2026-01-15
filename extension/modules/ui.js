@@ -29,18 +29,20 @@ window.UIModule = {
         riskBadge.className = 'as-badge as-badge-risk';
         
         let iconContent = '';
+        // Lógica de Ícones:
+        // >= 80: Safe (Verde) -> Mantém escudo simples, sem check (pedido do user)
+        // >= 40: Warning (Laranja) -> Escudo + !
+        // < 40: Danger (Vermelho) -> Escudo + X
         if (data.risk_score >= 80) {
             riskBadge.classList.add('as-badge-safe');
-            // Escudo com Check
-            iconContent = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>`;
+            // Escudo Simples (Visual mais limpo/neutro, mesmo sendo verde)
+            iconContent = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`;
         } else if (data.risk_score >= 40) {
             riskBadge.classList.add('as-badge-warning');
-            // Escudo com Exclamação
             iconContent = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>`;
         } else {
             riskBadge.classList.add('as-badge-danger');
-            // Escudo com X (Raio/Alerta)
-            iconContent = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>`; // Modificado para cruz simples dentro do escudo ou similar
+            iconContent = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>`; 
         }
         
         riskBadge.innerHTML = iconContent;
@@ -502,12 +504,28 @@ window.UIModule = {
             if (actionBtn) {
                 e.preventDefault();
                 e.stopPropagation();
-
                 const signal = actionBtn.dataset.signal;
                 const isCurrentlyVoted = actionBtn.classList.contains('active');
                 
-                // Cooldown check (entre ações, não limite total)
-                if (window.BotDetector && adHash) {
+                // === VALIDAÇÃO ANTECIPADA DE LIMITE (apenas para novos votos) ===
+                if (!isCurrentlyVoted && window.BotDetector && adHash) {
+                    const check = window.BotDetector.canReport(adHash, signal);
+                    if (!check.allowed) {
+                        this.showFeedback(tooltip, check.reason, 'error');
+                        // Reset button state
+                        e.target.closest('.as-action-btn').classList.remove('active');
+                        // Efeito visual de bloqueio
+                        actionBtn.animate([
+                            { transform: 'scale(1)' },
+                            { transform: 'scale(1.1)' },
+                            { transform: 'scale(1)' }
+                        ], { duration: 200 });
+                        return; // BLOQUEIA O VOTO
+                    }
+                }
+                
+                // Cooldown check (entre ações, não limite total) - BYPASS para likes
+                if (window.BotDetector && adHash && !['votes_like', 'votes_dislike'].includes(signal)) {
                     const cooldownRem = window.BotDetector.getCooldownRemaining(adHash);
                     if (cooldownRem > 0) {
                         this.showFeedback(tooltip, `Aguarda ${cooldownRem}s antes da próxima ação.`, 'warning');
@@ -521,28 +539,56 @@ window.UIModule = {
                 if (isCurrentlyVoted) {
                     // === REMOVER VOTO ===
                     // Trigger cooldown on remove? Usually yes to prevent toggle spam.
-                    if (window.BotDetector) {
+                    // Trigger cooldown on remove? Only for risk reports
+                    if (window.BotDetector && !['votes_like', 'votes_dislike'].includes(signal)) {
                         window.BotDetector.reportState.adCooldowns[adHash] = Date.now();
-                        startCooldownUI(30);
+                        startCooldownUI(3);
                     }
 
                     actionBtn.classList.remove('active', 'as-voted-anim');
                     
-                    // Atualizar contagem visual (percentagem vai recalcular no refresh)
+                    // Atualizar contagem visual (percentagem vai recalcular no refresh ou aqui se quisermos ser perfeitos)
+                    // Simplificação: decrementa 1 visualmente
                     const countSpan = actionBtn.querySelector('.as-btn-count');
+                    const barFill = actionBtn.querySelector('.as-btn-fill');
+                    
                     if (countSpan) {
-                        countSpan.textContent = ''; // Limpa contador visual
-                        countSpan.style.display = 'none';
+                         const currentText = countSpan.innerText;
+                         const match = currentText.match(/(\d+)/);
+                         if (match) {
+                             const newVal = Math.max(0, parseInt(match[1]) - 1);
+                             // Se não houver totalVotes disponível aqui, mantemos a percentagem antiga ou escondemos?
+                             // Melhor: Apenas atualiza o número. A percentagem exata requer recalculação total (cs).
+                             // Como o showTooltip é chamado com isUpdate=true logo a seguir, isto é apenas feedback imediato.
+                             countSpan.innerText = `${newVal}`; 
+                             // Wait, showTooltip will be called by onReport callback? Yes.
+                             // So actually we don't need complex DOM manipulation here, showTooltip re-renders everything!
+                             // BUT showTooltip re-renders HTML strings.
+                             // The 'click' listener is on the TOOLTIP element.
+                             // If showTooltip replaces innerHTML, the listener MIGHT receive 'isUpdate' and update content.
+                             // Wait, if showTooltip replaces innerHTML, the existing `actionBtn` variable is detached?
+                             // Yes. So this visual update is transient until onReport resolves and calls showTooltip.
+                             // So simpler is better.
+                             countSpan.innerText = newVal + ' (...)';
+                         }
                     }
 
-                    // Atualizar contador global
-                    const userLimitEl = tooltip.querySelector('.as-user-limit-info b');
-                    if (userLimitEl) {
-                        let currentLimit = parseInt(userLimitEl.innerText || '0');
-                        userLimitEl.innerText = Math.max(0, currentLimit - 1);
+                    // Atualizar contador global (Exceto Likes/Dislikes)
+                    if (!['votes_like', 'votes_dislike'].includes(signal)) {
+                        const userLimitEl = tooltip.querySelector('.as-user-limit-info b');
+                        if (userLimitEl) {
+                            let currentLimit = parseInt(userLimitEl.innerText || '0');
+                            userLimitEl.innerText = Math.max(0, currentLimit - 1);
+                        }
+
+                        // CRÍTICO: Decrementar contador persistente APENAS para reports
+                        if (adHash) {
+                            const voteCount = parseInt(localStorage.getItem(`as_vote_count_${adHash}`) || '0');
+                            localStorage.setItem(`as_vote_count_${adHash}`, Math.max(0, voteCount - 1));
+                        }
                     }
 
-                    // Remover do localStorage
+                    // Remover do localStorage (Mantém-se para saber o estado do botão)
                     if (adHash) {
                         try {
                             const savedVotes = JSON.parse(localStorage.getItem(`as_user_votes_${adHash}`) || '{}');
@@ -593,10 +639,10 @@ window.UIModule = {
                         }
                     }
 
-                    // === SUCESSO: APLICA COOLDOWN AGORA ===
-                     if (window.BotDetector && adHash) {
+                    // === SUCESSO: APLICA COOLDOWN AGORA (Exceto Likes) ===
+                     if (window.BotDetector && adHash && !['votes_like', 'votes_dislike'].includes(signal)) {
                         window.BotDetector.reportState.adCooldowns[adHash] = Date.now();
-                        startCooldownUI(30);
+                        startCooldownUI(3);
                     }
 
                     // === ADICIONAR VOTO ===
@@ -605,15 +651,24 @@ window.UIModule = {
                     // Atualizar contagem visual
                     const countSpan = actionBtn.querySelector('.as-btn-count');
                     if (countSpan) {
-                        countSpan.textContent = '✓';
-                        countSpan.style.display = 'inline-block';
+                         // NADA DE CHECKS - INCREMENTAR
+                         const currentText = countSpan.innerText;
+                         const match = currentText.match(/(\d+)/);
+                         const oldVal = match ? parseInt(match[1]) : 0;
+                         countSpan.innerText = `${oldVal + 1} (...)`;
+                         countSpan.style.display = 'inline-block';
                     }
 
-                    // Atualizar contador global
-                    const userLimitEl = tooltip.querySelector('.as-user-limit-info b');
-                    if (userLimitEl) {
-                        let currentLimit = parseInt(userLimitEl.innerText || '0');
-                        userLimitEl.innerText = currentLimit + 1;
+                    // Atualizar contador global VISUAL (Exceto Likes/Dislikes)
+                    // NOTA: O incremento persistente (localStorage) é feito em BotDetector.registerReport
+                    if (!['votes_like', 'votes_dislike'].includes(signal)) {
+                        const userLimitEl = tooltip.querySelector('.as-user-limit-info b');
+                        if (userLimitEl) {
+                            let currentLimit = parseInt(userLimitEl.innerText || '0');
+                            userLimitEl.innerText = currentLimit + 1;
+                        }
+                        // REMOVIDO: Incremento duplicado aqui causava contador 2x
+                        // O BotDetector.registerReport em content.js já faz: localStorage.setItem(`as_vote_count_${adHash}`, current + 1);
                     }
 
                     // Guardar no localStorage
@@ -853,8 +908,10 @@ window.UIModule = {
             const hiddenStyle = isHidden ? 'display:none' : '';
             const hiddenClass = isHidden ? 'as-btn-hidden' : '';
 
-            // Tooltip mostra contagem absoluta
-            const tooltipTitle = `${btn.label} (${count} votos) - Clique para reportar`;
+            // Tooltip: Usa descrição detalhada se existir, senão usa label simples
+            const tooltipTitle = btn.description 
+                ? `${btn.label}\n─────────────\n${btn.description}\n(${count} votos)`
+                : `${btn.label} (${count} votos) - Clique para reportar`;
 
             html += `
             <button class="as-action-btn ${btn.class} ${activeClass} ${hiddenClass}" 

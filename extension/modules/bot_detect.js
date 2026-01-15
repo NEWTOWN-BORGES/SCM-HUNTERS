@@ -17,10 +17,9 @@ window.BotDetector = {
 
     // Configuração anti-abuso
     CONFIG: {
-        // Rate limiting
         MAX_REPORTS_PER_MINUTE: 5,
         MAX_VOTES_PER_AD: 5,            // Novo limite: 5 votos por anúncio
-        REPORT_COOLDOWN_MS: 30000,      // 30s entre reports no mesmo anúncio
+        REPORT_COOLDOWN_MS: 3000,      // 3s entre reports no mesmo anúncio (Pedido User)
         
         // Deteção de bots
         MIN_CLICK_INTERVAL_MS: 50,       // Cliques < 50ms = bot
@@ -81,9 +80,15 @@ window.BotDetector = {
     /**
      * Verifica se um report pode ser feito (rate limiting + cooldown).
      * @param {string} adHash - Hash do anúncio
+     * @param {string} [signalType] - Tipo de voto (opcional)
      * @returns {Object} { allowed: boolean, reason: string }
      */
-    canReport(adHash) {
+    canReport(adHash, signalType) {
+        // BYPASS: Likes e Dislikes não têm limites
+        if (signalType && ['votes_like', 'votes_dislike'].includes(signalType)) {
+            return { allowed: true };
+        }
+
         const now = Date.now();
 
         // 1. Limite absoluto por anúncio (Persistente)
@@ -91,7 +96,7 @@ window.BotDetector = {
         if (voteCount >= this.CONFIG.MAX_VOTES_PER_AD) {
              return { 
                 allowed: false, 
-                reason: `Atingiste o limite de ${this.CONFIG.MAX_VOTES_PER_AD} votos neste anúncio.` 
+                reason: `Já registaste ${this.CONFIG.MAX_VOTES_PER_AD} interações neste anúncio. Limite atingido.` 
             };
         }
 
