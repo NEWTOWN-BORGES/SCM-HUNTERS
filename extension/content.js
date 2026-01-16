@@ -4,6 +4,24 @@
  * ATUALIZADO: Integra tracking comportamental e análise de anúncios.
  */
 
+// Carrega o UIModule globalmente
+const UIModule = window.UIModule || {};
+
+// Verifica se o módulo foi carregado
+if (!window.UIModule) {
+    console.warn('SCM HUNTERS: UIModule não detectado no objeto window. Verifique a ordem de carregamento no manifest.');
+}
+
+// Verifica se o CSS foi injetado (Log informativo apenas)
+console.log('SCM HUNTERS: Inicializando...');
+const hasOurCSS = Array.from(document.querySelectorAll('link, style')).some(el => 
+    (el.href && el.href.includes('content.css')) || 
+    (el.id === 'as-styles')
+);
+if (!hasOurCSS) {
+    console.debug('SCM HUNTERS: CSS não detectado por href. Isto é normal em alguns sites se injetado via manifest isolated world.');
+}
+
 const App = {
     // Configurações de Botões (Templates)
     buttonTemplates: {
@@ -348,6 +366,7 @@ const App = {
             // então vamos definir 'buttons' string e resolver depois ou hardcode references)
             buttonsKey: 'default'
         },
+        // Idealista e Imovirtual (RESTAURADO)
         {
             name: 'idealista-detail',
             check: () => window.location.hostname.includes('idealista.pt') && window.location.pathname.includes('/imovel/'),
@@ -392,13 +411,12 @@ const App = {
             name: 'imovirtual-detail',
             check: () => window.location.hostname.includes('imovirtual.com') && window.location.href.includes('/anuncio/'),
             selectors: {
-                container: 'body', // Fallback container
+                container: 'body', 
                 title: 'h1, [data-cy="adPageAdTitle"]',
                 price: '[data-cy="adPageAdPrice"], [data-cy="adPageHeaderPrice"], strong[aria-label="Preço"], .css-1wws9er, .css-u0t81v, .elm6lnc1, strong', 
                 description: '[data-cy="adPageAdDescription"], section[id="description"]',
-                // Tenta encontrar o link do mapa (morada) para inserir DEPOIS
                 insertTarget: 'a[href="#map"], a[class*="e1aypsbg1"]',
-                insertPosition: 'afterend' // Alterado para afterend do container/span
+                insertPosition: 'afterend' 
             },
             getId: (node) => window.location.href,
             isDetailPage: true,
@@ -407,17 +425,14 @@ const App = {
         {
             name: 'imovirtual',
             check: () => {
-                // Só ativa em páginas de resultados/pesquisa e NÃO em páginas de detalhes
                 return window.location.hostname.includes('imovirtual.com') && 
-                       !window.location.href.includes('/anuncio/') && // CRÍTICO: Excluir detalhe
+                       !window.location.href.includes('/anuncio/') && 
                        (window.location.pathname.includes('/arrendar/') || 
                         window.location.pathname.includes('/venda/') ||
                         window.location.pathname.includes('/comprar/') ||
                         window.location.pathname.includes('/resultados/'));
             },
             selectors: {
-                // Tenta apanhar apenas os cards reais de anúncios. 
-                // REMOVIDO: 'li' genérico (apanhava menus), 'p' genérico em title/price
                 container: 'article[data-sentry-component="AdvertCard"], article[class*="e1wy4jvd0"], div[data-cy="l-card"]', 
                 title: '[data-cy="listing-item-title"], h3[class*="title"], span[data-cy="listing-item-title"]',
                 price: '[data-cy="listing-item-price"], span[class*="price"], .css-1wws9er',
@@ -432,6 +447,7 @@ const App = {
             isDetailPage: false,
             buttonsKey: 'default'
         },
+        
         {
             name: 'standvirtual-detail',
             // Check mais permissivo: URL tem /anuncio/ OU existe um container de preço típico de detalhe
@@ -526,10 +542,11 @@ const App = {
 
     init() {
         console.log('[Anti-Scam] Init chamado. URL atual:', window.location.href);
+        console.log('[Anti-Scam] ✅ v5.0 - VERSÃO CORRIGIDA CARREGADA');
 
-        // Carrega configurações dos módulos externos (DESATIVADO NO REVERT)
-        // this.siteConfigs = window.SiteConfigs || [];
-
+        // CONFIGURAÇÃO MONOLÍTICA (Sem módulos externos)
+        // Apenas usa o array local siteConfigs
+        
         // Detecta qual site estamos
         this.currentConfig = this.siteConfigs.find(config => config.check());
 
@@ -895,15 +912,13 @@ const App = {
              // Atualiza sinais
              adData.community_signals[signalType] = (adData.community_signals[signalType] || 0) + delta;
              if (adData.community_signals[signalType] < 0) adData.community_signals[signalType] = 0;
-             adData.community_signals.total_votes = (adData.community_signals.total_votes || 0) + delta;
-             if (adData.community_signals.total_votes < 0) adData.community_signals.total_votes = 0;
-
-             // Logica de Score Dinâmico (Simplificada -> Feedback Loop)
-             // Se houver muitos votos negativos, baixar score
-             // Como é 'chinashops', foca em qualidade/risco
-             if (signalType === 'votes_bad_quality' || signalType === 'votes_fake_item') {
-                 adData.risk_score = Math.max(10, adData.risk_score - 10);
+             // Atualiza total (EXCETO likes/dislikes - estes não devem diluir percentagens)
+             if (!['votes_like', 'votes_dislike'].includes(signalType)) {
+                 adData.community_signals.total_votes = (adData.community_signals.total_votes || 0) + delta;
+                 if (adData.community_signals.total_votes < 0) adData.community_signals.total_votes = 0;
              }
+
+             // O cálculo de score é automático via StorageModule (percentual)
 
              // Salva e Atualiza UI
              await StorageModule.updateAdData(uniqueId, adData);
@@ -1103,55 +1118,58 @@ const App = {
         const badgeContainer = UIModule.createBadge(data, (e) => {
             const tooltipOptions = {
                 buttons: this.currentConfig.buttons || [],
+                voteQueue: Promise.resolve(),
                 onReport: async (signalType, delta = 1) => {
-                    const weight = window.BotDetector ? window.BotDetector.getWeightMultiplier() : 1.0;
+                    // Lock/Queue para evitar race conditions em cliques rápidos
+                    tooltipOptions.voteQueue = tooltipOptions.voteQueue.then(async () => {
+                        const weight = window.BotDetector ? window.BotDetector.getWeightMultiplier() : 1.0;
                     
-                    // Atualiza sinais da comunidade (localmente, simulação de envio)
-                    if (!data.community_signals) data.community_signals = {};
-                    if (!data.community_signals[signalType]) data.community_signals[signalType] = 0;
-                    
-                    data.community_signals[signalType] += delta; 
-                    // Garante que não fica negativo
-                    if (data.community_signals[signalType] < 0) data.community_signals[signalType] = 0;
-
-                    // Atualiza total
-                    data.community_signals.total_votes = (data.community_signals.total_votes || 0) + delta;
-                    if (data.community_signals.total_votes < 0) data.community_signals.total_votes = 0;
-
-                    // CORREÇÃO DEFINITIVA: Decrementa score quando voto negativo é adicionado
-                    const negativeSignals = ['votes_bad_quality', 'votes_fake_item', 'votes_no_response', 'votes_external_contact', 'votes_deposit_no_visit', 'votes_advance_payment'];
-                    if (negativeSignals.includes(signalType)) {
-                        const currentScore = data.risk_score || 100;
-                        if (delta > 0) {
-                            // Voto negativo ADICIONADO: baixa 20 pontos (mín 10)
-                            data.risk_score = Math.max(10, currentScore - 20);
-                            console.log(`[Anti-Scam] Score decrementado: ${currentScore} -> ${data.risk_score}`);
-                        } else if (delta < 0) {
-                            // Voto negativo REMOVIDO: sobe 10 pontos (máx 100)
-                            data.risk_score = Math.min(100, currentScore + 10);
-                            console.log(`[Anti-Scam] Score incrementado: ${currentScore} -> ${data.risk_score}`);
-                        }
+                    // CRÍTICO: Buscar dados FRESCOS do storage (não usar 'data' estático)
+                    let freshData = await StorageModule.getAdData(hash);
+                    if (!freshData) {
+                        freshData = StorageModule.createDefaultEntry();
                     }
+                    
+                    // Atualiza sinais da comunidade (nos dados frescos)
+                    if (!freshData.community_signals) freshData.community_signals = {};
+                    if (!freshData.community_signals[signalType]) freshData.community_signals[signalType] = 0;
+                    
+                    freshData.community_signals[signalType] += delta; 
+                    // Garante que não fica negativo
+                    if (freshData.community_signals[signalType] < 0) freshData.community_signals[signalType] = 0;
+
+                    // Atualiza total (EXCETO likes/dislikes - estes não devem diluir percentagens)
+                    if (!['votes_like', 'votes_dislike'].includes(signalType)) {
+                        freshData.community_signals.total_votes = (freshData.community_signals.total_votes || 0) + delta;
+                        if (freshData.community_signals.total_votes < 0) freshData.community_signals.total_votes = 0;
+                    }
+
+                    // O cálculo de score é feito automaticamente pelo StorageModule.calculateScores()
+                    // que usa a lógica percentual democrática (total_votes) para TODOS os botões
 
                     // Atualiza contagem de participantes únicos (Heurística: 1º voto registado do user)
                     const userVotes = window.BotDetector ? window.BotDetector.getUserVoteCount(hash) : 0;
                     // Se userVotes == 1, significa que é o primeiro report deste user neste anúncio
                     if (userVotes === 1 && delta > 0) {
-                         data.community_signals.users_count = (data.community_signals.users_count || 0) + 1;
+                         freshData.community_signals.users_count = (freshData.community_signals.users_count || 0) + 1;
                     }
 
-                    // ATUALIZAÇÃO: Regista interação no BotDetector para incrementar contador do utilizador e verificar limites
-                    if (delta > 0 && window.BotDetector) {
-                        window.BotDetector.registerReport(hash);
+                    // ATUALIZAÇÃO: Regista interação no BotDetector para gerir contador e limites
+                    // CRÍTICO: Likes/Dislikes NÃO devem contar para o limite ou histórico de "reports"
+                    if (window.BotDetector && !['votes_like', 'votes_dislike'].includes(signalType)) {
+                        window.BotDetector.registerVoteChange(hash, delta);
                     }
                     
-                    const newData = await StorageModule.updateAdData(hash, data);
+                    const newData = await StorageModule.updateAdData(hash, freshData);
                     
-                    // UPDATE TOOLTIP (Não fecha)
-                    UIModule.showTooltip(newData, null, tooltipOptions, hash, true);
+                    // UPDATE TOOLTIP (se estiver aberto)
+                    if (UIModule.activeTooltip) {
+                        UIModule.showTooltip(newData, null, tooltipOptions, hash, true);
+                    }
                     
-                    // Atualiza Badge (re-inject)
-                    this.injectUI(containerNode, selectors, newData, hash); 
+                        // Atualiza Badge (re-inject)
+                        this.injectUI(containerNode, selectors, newData, hash); 
+                    });
                 }
             };
 

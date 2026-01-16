@@ -54,6 +54,11 @@ const StorageModule = {
                     entry.user_signals = { ...entry.user_signals, ...data.user_signals };
                     delete data.user_signals;
                 }
+                // CRÍTICO: Merge profundo para community_signals (evita perder votos anteriores)
+                if (data.community_signals) {
+                    entry.community_signals = { ...entry.community_signals, ...data.community_signals };
+                    delete data.community_signals;
+                }
                 
                 // Merge campos restantes
                 entry = { ...entry, ...data, last_seen: Date.now() };
@@ -231,38 +236,100 @@ const StorageModule = {
         const community = entry.community_signals || {};
         const behavior = entry.behavior_signals || {};
 
-        // 1. Sinais do Anúncio (AdAnalyzer)
+        // 1. Sinais do Anúncio (AdAnalyzer - Mantém absoluto pois é análise IA única)
         if (ad.score_adjustment !== undefined) {
             penalties -= ad.score_adjustment;
         }
 
-        // 2. Sinais do Utilizador (Reports Locais - Legado/User Action)
+        // 2. Sinais do Utilizador (Legacy - Mantém absoluto)
         if (user.advance_payment > 0) penalties += 50;
         if (user.external_contact > 0) penalties += 30;
 
-        // 3. Sinais da Comunidade (V2.0 COMPLETO)
-        
-        // --- RISCO CRÍTICO ---
-        if (community.votes_advance_payment > 0) penalties += (community.votes_advance_payment * 40);
-        if (community.votes_off_platform > 0) penalties += (community.votes_off_platform * 35);
-        if (community.votes_fake_item > 0) penalties += (community.votes_fake_item * 30);
-        
-        // --- RISCO MÉDIO ---
-        if (community.votes_inconsistent > 0) penalties += (community.votes_inconsistent * 20);
-        if (community.votes_unrealistic_price > 0) penalties += (community.votes_unrealistic_price * 20);
-        if (community.votes_repost > 0) penalties += (community.votes_repost * 15);
-        if (community.votes_new_profile > 0) penalties += (community.votes_new_profile * 15);
-        if (community.votes_conditions_changed > 0) penalties += (community.votes_conditions_changed * 15);
+        // 3. Sinais da Comunidade (PERCENTAGE BASED)
+        const total = community.total_votes || 0;
 
-        // --- RISCO LEVE ---
-        if (community.votes_evasive > 0) penalties += (community.votes_evasive * 10);
-        if (community.votes_location_vague > 0) penalties += (community.votes_location_vague * 10);
-        if (community.votes_generic_images > 0) penalties += (community.votes_generic_images * 10);
-        if (community.votes_vague_desc > 0) penalties += (community.votes_vague_desc * 5);
-        if (community.votes_pressure > 0) penalties += (community.votes_pressure * 10);
-        if (community.votes_missing_details > 0) penalties += (community.votes_missing_details * 5);
+        if (total > 0) {
+            // Helper para calcular impacto
+            // count: nº de votos nesse botão
+            // maxImpact: quanto afeta o score (0-100) se 100% das pessoas votarem nisto
+            const calcImpact = (count, maxImpact) => {
+                if (!count) return 0;
+                const ratio = count / total;
+                return ratio * maxImpact;
+            };
 
-        // 4. Sinais Comportamentais (Agregados)
+            // --- RISCO CRÍTICO (Impacto 100% - Se todos disserem isto, é SCAM garantido) ---
+            penalties += calcImpact(community.votes_no_response, 100);
+            penalties += calcImpact(community.votes_external_contact, 100);
+            penalties += calcImpact(community.votes_advance_payment, 100);
+            penalties += calcImpact(community.votes_fake_item, 100);
+            penalties += calcImpact(community.votes_deposit_no_visit, 100);
+            penalties += calcImpact(community.votes_bad_quality, 100);
+            penalties += calcImpact(community.votes_off_platform, 100);
+            
+            // Novos Sinais Críticos (Real Estate/General)
+            penalties += calcImpact(community.votes_not_owner, 100);
+            penalties += calcImpact(community.votes_no_visit_allowed, 100); // Recusa visita
+            penalties += calcImpact(community.votes_cloned_listing, 100);
+            penalties += calcImpact(community.votes_property_different, 100);
+            
+            // Novos Sinais Críticos (OLX/Facebook/Auto)
+            penalties += calcImpact(community.votes_mbway_scam, 100);
+            penalties += calcImpact(community.votes_fake_proof, 100);
+            penalties += calcImpact(community.votes_sms_code, 100);
+            penalties += calcImpact(community.votes_foreign_shipping, 100);
+            penalties += calcImpact(community.votes_suspicious_link, 100);
+            penalties += calcImpact(community.votes_cloned_ad, 100); // Alias
+            penalties += calcImpact(community.votes_fake_profile, 100);
+            penalties += calcImpact(community.votes_deposit_before_see, 100);
+            penalties += calcImpact(community.votes_fake_payment_proof, 100);
+            penalties += calcImpact(community.votes_abroad_car, 100);
+            penalties += calcImpact(community.votes_accident_hidden, 100);
+            penalties += calcImpact(community.votes_debts_hidden, 100);
+
+            penalties += calcImpact(community.votes_fake_courier, 100);
+            penalties += calcImpact(community.votes_phishing, 100);
+            penalties += calcImpact(community.votes_external_payment, 100);
+
+            // --- RISCO MÉDIO/AMARELO (Impacto 40%) ---
+            penalties += calcImpact(community.votes_price_too_good, 40);
+            penalties += calcImpact(community.votes_unrealistic_price, 40);
+            penalties += calcImpact(community.votes_repost, 40);
+            penalties += calcImpact(community.votes_conditions_changed, 40);
+            penalties += calcImpact(community.votes_pressure, 40);
+            penalties += calcImpact(community.votes_evasive, 40);
+            penalties += calcImpact(community.votes_location_vague, 40);
+            penalties += calcImpact(community.votes_generic_images, 40);
+            penalties += calcImpact(community.votes_new_profile, 40);
+            penalties += calcImpact(community.votes_inconsistent, 40);
+            
+            // Novos Sinais Amarelos
+            penalties += calcImpact(community.votes_too_cheap, 40);
+            penalties += calcImpact(community.votes_ai_photos, 40);
+            penalties += calcImpact(community.votes_targets_foreigners, 40);
+            penalties += calcImpact(community.votes_bad_portuguese, 40);
+            penalties += calcImpact(community.votes_address_fishing, 40);
+            penalties += calcImpact(community.votes_only_whatsapp, 40); 
+            penalties += calcImpact(community.votes_km_suspect, 40);
+            penalties += calcImpact(community.votes_no_test_drive, 40);
+            penalties += calcImpact(community.votes_docs_incomplete, 40);
+            penalties += calcImpact(community.votes_pressure_sale, 40);
+
+            // --- RISCO LEVE (Impacto 20%) ---
+            penalties += calcImpact(community.votes_vague_desc, 20);
+            penalties += calcImpact(community.votes_missing_details, 20);
+            penalties += calcImpact(community.votes_poor_description, 20);
+            penalties += calcImpact(community.votes_sold_item, 20);
+        }
+        
+        // Penalidade por Dislikes (Separado do Rácio Democrático)
+        const dislikes = community.votes_dislike || 0;
+        if (dislikes > 0) {
+            // 3 pontos por dislike, capado a 15 (feedback leve)
+            penalties += Math.min(15, dislikes * 3);
+        }
+
+        // 4. Sinais Comportamentais (Mantém absoluto por enquanto)
         if (behavior.total_visits > 5) {
             const abandonRate = behavior.abandon_fast_count / behavior.total_visits;
             if (abandonRate > 0.6) penalties += 15;
@@ -274,56 +341,73 @@ const StorageModule = {
 
     /**
      * Calcula score de qualidade (Interesse da Comunidade).
+     * REINVENTADO: Sistema Democrático por Percentagem
      */
     calculateQualityScore(entry) {
         let quality = 0;
-        const behavior = entry.behavior_signals || {};
         const community = entry.community_signals || {};
         const native = entry.native_signals || {};
-        
-        // 1. Sinais Nativos do Site
-        if (native.saves > 0) quality += Math.min(50, native.saves * 5);
-        if (native.views > 1000) quality += 10;
+        const total = community.total_votes || 0;
 
-        // 2. Votos da Comunidade (V2.0 POSITIVOS)
-        
-        // --- SINAIS FORTES ---
-        if (community.votes_visit_available > 0) quality += (community.votes_visit_available * 30);
-        if (community.votes_location_confirmed > 0) quality += (community.votes_location_confirmed * 25);
-        if (community.votes_docs_shown > 0) quality += (community.votes_docs_shown * 20);
+        // 1. Sinais Nativos do Site (Base Absoluta - Bonus)
+        if (native.saves > 0) quality += Math.min(20, native.saves * 2);
+        if (native.views > 1000) quality += 5;
 
-        // --- SINAIS MÉDIOS ---
-        if (community.votes_old_profile > 0) quality += (community.votes_old_profile * 15);
-        if (community.votes_original_photos > 0) quality += (community.votes_original_photos * 15);
-        if ((community.votes_legit || 0) > 0) quality += (community.votes_legit * 15); // Legado
+        // 2. Votos da Comunidade (PERCENTAGE BASED)
+        if (total > 0) {
+            const calcImpact = (count, maxImpact) => {
+                if (!count) return 0;
+                const ratio = count / total;
+                return ratio * maxImpact;
+            };
 
-        // --- SINAIS LEVES ---
-        if (community.votes_clear_answers > 0) quality += (community.votes_clear_answers * 10);
-        if (community.votes_normal_interaction > 0) quality += (community.votes_normal_interaction * 10);
-        
-        // --- LIKES (Geral) ---
-        if (community.votes_like > 0) {
-             quality += (community.votes_like * 5);
-        }
-
-        // 3. Comportamento Local
-        if (behavior.total_visits > 0) {
-            const scrollRate = behavior.scroll_complete_count / behavior.total_visits;
-            if (scrollRate > 0.4) quality += 20;
+            // --- SINAIS FORTES (Prova Física/Transação Real) - Impacto 80% ---
+            quality += calcImpact(community.votes_visit_available, 80);
+            quality += calcImpact(community.votes_visit_done, 80);
+            quality += calcImpact(community.votes_saw_car, 80);
+            quality += calcImpact(community.votes_test_drive_ok, 80);
+            quality += calcImpact(community.votes_mechanic_check, 80);
+            quality += calcImpact(community.votes_hand_delivery, 80);
+            quality += calcImpact(community.votes_product_ok, 80);
+            quality += calcImpact(community.votes_mail_ok, 80);
             
-            const contactRate = behavior.contact_open_count / behavior.total_visits;
-            if (contactRate > 0.15) quality += 30; 
-            else if (contactRate > 0.05) quality += 10;
+            // Documentos e Localização Forte - Impacto 60%
+            quality += calcImpact(community.votes_docs_shown, 60);
+            quality += calcImpact(community.votes_docs_ok, 60);
+            quality += calcImpact(community.votes_docs_complete, 60);
+            quality += calcImpact(community.votes_location_confirmed, 60);
+            quality += calcImpact(community.votes_location_matches, 60);
+            quality += calcImpact(community.votes_real_owner, 60);
+            quality += calcImpact(community.votes_owner_real, 60);
+
+            // --- SINAIS MÉDIOS (Reputação/Comunicação) - Impacto 40% ---
+            quality += calcImpact(community.votes_old_profile, 40);
+            quality += calcImpact(community.votes_legit_profile, 40);
+            quality += calcImpact(community.votes_trusted_seller, 40);
+            quality += calcImpact(community.votes_trusted_stand, 40);
+            quality += calcImpact(community.votes_history_clear, 40);
+            
+            quality += calcImpact(community.votes_original_photos, 30);
+            quality += calcImpact(community.votes_real_photos, 30);
+            quality += calcImpact(community.votes_legit, 30);
+
+            // --- SINAIS LEVES (Comunicação) - Impacto 20% ---
+            quality += calcImpact(community.votes_clear_answers, 20);
+            quality += calcImpact(community.votes_clear_communication, 20);
+            quality += calcImpact(community.votes_communication, 20);
+            quality += calcImpact(community.votes_normal_interaction, 20);
+            quality += calcImpact(community.votes_responsive, 20);
+            quality += calcImpact(community.votes_clear_process, 20);
+            quality += calcImpact(community.votes_fair_price, 20);
+
         }
 
-        if (behavior.copy_contact_count > 0) {
-             quality += Math.min(40, behavior.copy_contact_count * 10);
+        // Bonus por Likes (Separado do Rácio Democrático)
+        const likes = community.votes_like || 0;
+        if (likes > 0) {
+            // 2 pontos por like, capado a 10
+            quality += Math.min(10, likes * 2);
         }
-
-        if (behavior.avg_time_on_page > 45000) quality += 10;
-
-        // Se SÓ tiver views (sem interação ou favoritos), não sobe muito
-        if (quality === 0 && native.views > 0 && community.total_votes === 0) return 0;
 
         return Math.min(100, quality);
     },

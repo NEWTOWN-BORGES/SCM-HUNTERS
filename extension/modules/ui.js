@@ -6,7 +6,13 @@
 
 window.UIModule = {
     activeTooltip: null,
-    isClickLocked: false, // Estado global: tooltip fixo por clique
+    isClickLocked: false,
+    
+    // Estado de Persistência UI
+    expandedTabs: {}, 
+    activeTab: 'risk',
+    currentData: null,
+    currentHash: null,
 
     /**
      * Cria o badge de status.
@@ -119,6 +125,9 @@ window.UIModule = {
         if (!isUpdate && this.activeTooltip) this.closeTooltip();
         if (isUpdate && !this.activeTooltip) return;
 
+        this.currentData = data; // Guardar para re-render
+        this.currentHash = adHash; // Guardar hash
+
         try {
             const userVotes = window.BotDetector ? window.BotDetector.getUserVoteCount(adHash) : 0;
             const maxVotes = window.BotDetector ? window.BotDetector.CONFIG.MAX_VOTES_PER_AD : 5;
@@ -146,6 +155,7 @@ window.UIModule = {
                     cs.user_votes = {};
                 }
             }
+            const localUserVotes = cs.user_votes || {};
             
             const totalVotes = (cs.votes_legit || 0) + (cs.votes_no_response || 0) + 
                               (cs.votes_external_contact || 0) + (cs.votes_advance_payment || 0) + 
@@ -183,10 +193,10 @@ window.UIModule = {
             }
 
             // Score Handling (Beta 3.1)
-            const rawScore = data.score || data.risk_score;
-            // Se score for muito baixo (0-5) e confiança não for Alta, assumimos dados insuficientes/instáveis
-            const isScoreUnreliable = (rawScore <= 5 && confLevel !== 'Alta');
-            const scoreDisplay = isScoreUnreliable ? '<span style="font-size:20px; line-height:40px;">?</span>' : rawScore;
+            const rawScore = data.score !== undefined ? data.score : data.risk_score;
+            // FIX: Removida lógica de esconder scores baixos. Se é 0, mostra 0.
+            const isScoreUnreliable = false; 
+            const scoreDisplay = Math.round(rawScore);
             // Ajustar cor do anel para cinzento se não for fiável
             const finalRingColor = isScoreUnreliable ? '#d1d5db' : riskColor; 
             const finalRingBg = isScoreUnreliable ? '#f3f4f6' : finalRingColor;
@@ -220,8 +230,8 @@ window.UIModule = {
 
                 <!-- TABS NAVIGATION -->
                 <div class="as-tabs-nav">
-                    <button class="as-tab-btn active" data-tab="risk">⚠️ Padrões</button>
-                    <button class="as-tab-btn" data-tab="positive">✅ Sinais</button>
+                    <button class="as-tab-btn ${this.activeTab === 'risk' ? 'active' : ''}" data-tab="risk">⚠️ Padrões</button>
+                    <button class="as-tab-btn ${this.activeTab === 'positive' ? 'active' : ''}" data-tab="positive">✅ Sinais</button>
                 </div>
 
                 <!-- LIKES GLOBALS (Top Position) -->
@@ -229,15 +239,15 @@ window.UIModule = {
                     <!-- ... unchanged likes section ... -->
                     <div class="as-likes-container-center">
                         <div class="as-likes-container">
-                            <button class="as-like-btn" title="Gosto disto">
+                            <button class="as-like-btn ${localUserVotes['votes_like'] ? 'as-btn-voted active' : ''}" title="Gosto disto">
                                 <svg viewBox="0 0 24 24" class="as-icon-like"><path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-1.91l-.01-.01L23 10z"/></svg>
                                 <span class="as-like-count">${cs.votes_like || 0}</span>
                             </button>
                             <div class="as-like-bar-container">
                                  <div class="as-like-bar" style="width: ${getLikeRatio(cs)}%"></div>
                             </div>
-                            <button class="as-dislike-btn" title="Não gosto disto">
-                                <svg viewBox="0 0 24 24" class="as-icon-dislike"><path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v1.91l.01.01L1 14c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2zm4 0v12h4V3h-4z"/></svg>
+                            <button class="as-dislike-btn ${localUserVotes['votes_dislike'] ? 'as-btn-voted active' : ''}" title="Não gosto disto">
+                                <svg viewBox="0 0 24 24" class="as-icon-dislike"><path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v1.91.01.01L1 14c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2zm4 0v12h4V3h-4z"/></svg>
                                 <span class="as-dislike-count">${cs.votes_dislike || 0}</span>
                             </button>
                         </div>
@@ -252,7 +262,7 @@ window.UIModule = {
                 </div>
 
                 <!-- TAB CONTENT: RISK -->
-                <div class="as-tab-content as-tab-risk active" id="as-tab-risk">
+                <div class="as-tab-content as-tab-risk ${this.activeTab === 'risk' ? 'active' : ''}" id="as-tab-risk">
                     <div class="as-section-title-mini" style="font-size:10px; font-weight:700; color:#9ca3af; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">⚙️ Padrões do Sistema</div>
                     <div class="as-section-content">
                         ${this.renderExplanations(explanation.explanations.filter(e => e.kind !== 'quality'), 'risk')}
@@ -262,12 +272,12 @@ window.UIModule = {
 
                     <div class="as-section-title-mini" style="font-size:10px; font-weight:700; color:#9ca3af; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">👥 Interações Registadas</div>
                     <div class="as-dynamic-buttons as-grid-buttons">
-                        ${this.renderButtons(riskButtons, cs)}
+                        ${this.renderButtons(riskButtons, cs, 'risk')}
                     </div>
                 </div>
 
                 <!-- TAB CONTENT: POSITIVE -->
-                <div class="as-tab-content as-tab-positive" id="as-tab-positive">
+                <div class="as-tab-content as-tab-positive ${this.activeTab === 'positive' ? 'active' : ''}" id="as-tab-positive">
                     <div class="as-section-title-mini" style="font-size:10px; font-weight:700; color:#9ca3af; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">⚙️ Padrões do Sistema</div>
                     <div class="as-section-content">
                         ${this.renderExplanations(explanation.explanations.filter(e => e.kind === 'quality'), 'positive')}
@@ -277,7 +287,7 @@ window.UIModule = {
 
                     <div class="as-section-title-mini" style="font-size:10px; font-weight:700; color:#9ca3af; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">👥 Interações Registadas</div>
                     <div class="as-dynamic-buttons as-grid-buttons">
-                        ${this.renderButtons(positiveButtons, cs)}
+                        ${this.renderButtons(positiveButtons, cs, 'positive')}
                     </div>
                 </div>
                 
@@ -292,6 +302,7 @@ window.UIModule = {
             if (isUpdate) {
                 tooltip = this.activeTooltip;
                 tooltip.innerHTML = html;
+                tooltip.style.height = 'auto'; // Força recálculo da altura
             } else {
                 tooltip = document.createElement('div');
                 tooltip.className = 'as-tooltip';
@@ -300,6 +311,10 @@ window.UIModule = {
 
                 document.body.appendChild(tooltip);
                 this.activeTooltip = tooltip;
+
+                // FIX: Attach Events ONLY once, on creation.
+                // Re-renders (innerHTML updates) will still work because we use event delegation (.closest)
+                this.attachEvents(tooltip, options, adHash);
 
                 // Posicionamento Robusto
                 const rect = targetElement.getBoundingClientRect();
@@ -366,10 +381,10 @@ window.UIModule = {
 
         // this.activeTooltip = tooltip; // Já definido acima? Não, definimos activeTooltip no final?
         // Ah, checked `ui.js` previously. `this.activeTooltip = tooltip;` was there.
-        this.activeTooltip = tooltip;
-
-        // Events
-        this.attachEvents(tooltip, options, adHash);
+        // this.activeTooltip = tooltip;
+        
+        // Events MOVED to creation block to avoid duplicates!
+        // this.attachEvents(tooltip, options, adHash);
         
         // Fechar APENAS ao clicar fora (ou no escudo/trigger se tratado externamente)
         const outsideClickHandler = (e) => {
@@ -468,8 +483,8 @@ window.UIModule = {
             let remaining = seconds;
             timerVal.textContent = remaining;
             
-            // Disable actionable buttons (not tabs)
-            const disableBtns = () => tooltip.querySelectorAll('.as-btn, .as-like-btn, .as-dislike-btn').forEach(b => b.disabled = true);
+            // Disable actionable buttons (not tabs, not View More)
+            const disableBtns = () => tooltip.querySelectorAll('.as-action-btn, .as-btn, .as-like-btn, .as-dislike-btn').forEach(b => b.disabled = true);
             disableBtns();
 
             const interval = setInterval(() => {
@@ -478,7 +493,7 @@ window.UIModule = {
                     clearInterval(interval);
                     timerDisplay.style.display = 'none';
                     // Re-enable (except voted ones logic handling elsewhere, but simple re-enable is safe-ish)
-                    tooltip.querySelectorAll('.as-btn, .as-like-btn, .as-dislike-btn').forEach(b => {
+                    tooltip.querySelectorAll('.as-action-btn, .as-btn, .as-like-btn, .as-dislike-btn').forEach(b => {
                         if (!b.classList.contains('as-btn-voted') && !b.classList.contains('as-voted-anim')) b.disabled = false;
                     });
                 } else {
@@ -499,173 +514,192 @@ window.UIModule = {
 
         // Unified Click Handler (Delegation)
         tooltip.addEventListener('click', (e) => {
-            // 1. Botões de Ação (Vote/Report) - TOGGLE SYSTEM
-            const actionBtn = e.target.closest('.as-action-btn');
+            // 0. Tabs (Navegação via Delegação)
+            const tabBtn = e.target.closest('.as-tab-btn');
+            if (tabBtn) {
+                e.preventDefault();
+                // Remove active de todos
+                tooltip.querySelectorAll('.as-tab-btn').forEach(b => b.classList.remove('active'));
+                tooltip.querySelectorAll('.as-tab-content').forEach(c => c.classList.remove('active'));
+                
+                // Ativa atual
+                tabBtn.classList.add('active');
+                const tabIdVal = tabBtn.dataset.tab || tabBtn.dataset.target;
+                this.activeTab = tabIdVal; // Salva estado de persistência
+
+                const tabId = `as-tab-${tabIdVal}`;
+                const content = tooltip.querySelector(`#${tabId}`);
+                if (content) content.classList.add('active');
+                return;
+            }
+
+            // 1. Botão "Ver mais/Ver menos"
+            const viewMoreBtn = e.target.closest('.as-view-more-link');
+            if (viewMoreBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Obtém o ID da aba a partir do atributo data-tab
+                const tabId = viewMoreBtn.dataset.tab;
+                
+                // Inverte o estado de expansão para esta aba específica
+                this.expandedTabs[tabId] = !this.expandedTabs[tabId];
+                
+                // Re-renderizar tooltip completo para aplicar novo estado
+                if (this.currentData) {
+                    this.showTooltip(this.currentData, null, options, this.currentHash, true);
+                }
+                
+                return;
+            }
+            
+            // 2. Botões de Ação (Vote/Report/Like)
+            let actionBtn = e.target.closest('.as-action-btn');
+
+
             if (actionBtn) {
                 e.preventDefault();
                 e.stopPropagation();
                 const signal = actionBtn.dataset.signal;
-                const isCurrentlyVoted = actionBtn.classList.contains('active');
-                
-                // === VALIDAÇÃO ANTECIPADA DE LIMITE (apenas para novos votos) ===
-                if (!isCurrentlyVoted && window.BotDetector && adHash) {
-                    const check = window.BotDetector.canReport(adHash, signal);
-                    if (!check.allowed) {
-                        this.showFeedback(tooltip, check.reason, 'error');
-                        // Reset button state
-                        e.target.closest('.as-action-btn').classList.remove('active');
-                        // Efeito visual de bloqueio
-                        actionBtn.animate([
-                            { transform: 'scale(1)' },
-                            { transform: 'scale(1.1)' },
-                            { transform: 'scale(1)' }
-                        ], { duration: 200 });
-                        return; // BLOQUEIA O VOTO
+                const isCurrentlyVoted = actionBtn.classList.contains('active') || actionBtn.classList.contains('as-btn-voted');
+
+                // PRIORIDADE 1: REMOVER VOTO (Sempre permitido, sem cooldown)
+                if (isCurrentlyVoted) {
+                    actionBtn.classList.remove('active', 'as-voted-anim', 'as-btn-voted');
+                    
+                    if (!['votes_like', 'votes_dislike'].includes(signal)) {
+                        const countSpan = actionBtn.querySelector('.as-btn-count');
+                        if (countSpan) {
+                            const match = countSpan.innerText.match(/(\d+)/);
+                            if (match) countSpan.innerText = Math.max(0, parseInt(match[1]) - 1) + ' (...)';
+                        }
+                        const userLimitEl = tooltip.querySelector('.as-user-limit-info b');
+                        if (userLimitEl) {
+                            const currentLimit = parseInt(userLimitEl.innerText || '0');
+                            userLimitEl.innerText = Math.max(0, currentLimit - 1);
+                        }
                     }
+
+                    options.onReport(signal, -1);
+                    if (adHash) {
+                        try {
+                            const saved = JSON.parse(localStorage.getItem(`as_user_votes_${adHash}`) || '{}');
+                            delete saved[signal];
+                            localStorage.setItem(`as_user_votes_${adHash}`, JSON.stringify(saved));
+                        } catch (e) {}
+                    }
+                    this.showFeedback(tooltip, 'Voto removido.', 'neutral');
+                    return;
                 }
-                
-                // Cooldown check (entre ações, não limite total) - BYPASS para likes
-                if (window.BotDetector && adHash && !['votes_like', 'votes_dislike'].includes(signal)) {
+
+                // PRIORIDADE 2: ADICIONAR VOTO
+
+                // bypass check para tipos que não têm cooldown
+                const btnClass = actionBtn.getAttribute('class') || '';
+                const btnTab = actionBtn.dataset.tab;
+                let cooldownSeconds = 0;
+
+                if (btnTab === 'risk') {
+                    if (btnClass.includes('as-btn-warning')) {
+                        cooldownSeconds = 3; // Amarelo
+                    } else if (btnClass.includes('as-btn-neutral')) {
+                        cooldownSeconds = 0; // Branco (Neutral)
+                    } else {
+                        cooldownSeconds = 5; // Vermelho (Default Risk)
+                    }
+                } else {
+                    cooldownSeconds = 0; // Verde / Outros
+                }
+
+                // Cooldown check (APENAS se for voto com custo de cooldown e não for remoção)
+                if (window.BotDetector && adHash && cooldownSeconds > 0) {
                     const cooldownRem = window.BotDetector.getCooldownRemaining(adHash);
                     if (cooldownRem > 0) {
-                        this.showFeedback(tooltip, `Aguarda ${cooldownRem}s antes da próxima ação.`, 'warning');
+                        this.showFeedback(tooltip, `Aguarda ${cooldownRem}s.`, 'warning');
                         startCooldownUI(cooldownRem);
                         return;
                     }
-                    // NOTA: O registo do cooldown foi movido para baixo para evitar penalizar cliques inválidos (conflitos)
                 }
 
-                // TOGGLE LOGIC
-                if (isCurrentlyVoted) {
-                    // === REMOVER VOTO ===
-                    // Trigger cooldown on remove? Usually yes to prevent toggle spam.
-                    // Trigger cooldown on remove? Only for risk reports
-                    if (window.BotDetector && !['votes_like', 'votes_dislike'].includes(signal)) {
-                        window.BotDetector.reportState.adCooldowns[adHash] = Date.now();
-                        startCooldownUI(3);
-                    }
+                // === CHECK CONFLICTS & AUTO-RESOLVE (Swaps) ===
+                if (adHash && !['votes_like', 'votes_dislike'].includes(signal)) {
+                    const CONFLICTS = {
+                        'votes_new_profile': ['votes_old_profile', 'votes_trusted_seller', 'votes_legit_profile'],
+                        'votes_old_profile': ['votes_new_profile', 'votes_fake_profile'],
+                        'votes_trusted_seller': ['votes_new_profile', 'votes_fake_profile'],
+                        'votes_fake_profile': ['votes_old_profile', 'votes_trusted_seller', 'votes_legit_profile'],
+                        'votes_evasive': ['votes_clear_answers', 'votes_responsive', 'votes_clear_communication'],
+                        'votes_no_response': ['votes_responsive', 'votes_clear_communication', 'votes_negotiation_ok'],
+                        'votes_generic_images': ['votes_real_photos', 'votes_original_photos'],
+                        'votes_ai_photos': ['votes_real_photos', 'votes_original_photos'],
+                        'votes_cloned_listing': ['votes_real_photos', 'votes_original_photos'],
+                        'votes_real_photos': ['votes_generic_images', 'votes_ai_photos', 'votes_cloned_listing', 'votes_fake_photo'],
+                        'votes_original_photos': ['votes_generic_images', 'votes_ai_photos', 'votes_cloned_listing', 'votes_fake_photo'],
+                        'votes_location_vague': ['votes_location_confirmed', 'votes_location_matches'],
+                        'votes_location_confirmed': ['votes_location_vague'],
+                        'votes_location_matches': ['votes_vague_location', 'votes_property_different'],
+                        'votes_property_different': ['votes_location_matches'],
+                        'votes_visit_available': ['votes_no_visit_allowed', 'votes_deposit_no_visit', 'votes_advance_payment'],
+                        'votes_no_visit_allowed': ['votes_visit_available', 'votes_visit_done'],
+                        'votes_deposit_no_visit': ['votes_visit_available', 'votes_visit_done'],
+                        'votes_visit_done': ['votes_no_visit_allowed', 'votes_deposit_no_visit', 'votes_fake_item'],
+                        'votes_docs_shown': ['votes_docs_incomplete', 'votes_not_owner'],
+                        'votes_docs_ok': ['votes_docs_incomplete', 'votes_not_owner'],
+                        'votes_docs_incomplete': ['votes_docs_shown', 'votes_docs_ok', 'votes_docs_complete'],
+                        'votes_real_owner': ['votes_not_owner', 'votes_fake_item'],
+                        'votes_not_owner': ['votes_real_owner', 'votes_docs_ok', 'votes_visit_done'],
+                        'votes_docs_complete': ['votes_docs_incomplete', 'votes_no_docs'],
+                        'votes_no_docs': ['votes_docs_complete']
+                    };
 
-                    actionBtn.classList.remove('active', 'as-voted-anim');
-                    
-                    // Atualizar contagem visual (percentagem vai recalcular no refresh ou aqui se quisermos ser perfeitos)
-                    // Simplificação: decrementa 1 visualmente
-                    const countSpan = actionBtn.querySelector('.as-btn-count');
-                    const barFill = actionBtn.querySelector('.as-btn-fill');
-                    
-                    if (countSpan) {
-                         const currentText = countSpan.innerText;
-                         const match = currentText.match(/(\d+)/);
-                         if (match) {
-                             const newVal = Math.max(0, parseInt(match[1]) - 1);
-                             // Se não houver totalVotes disponível aqui, mantemos a percentagem antiga ou escondemos?
-                             // Melhor: Apenas atualiza o número. A percentagem exata requer recalculação total (cs).
-                             // Como o showTooltip é chamado com isUpdate=true logo a seguir, isto é apenas feedback imediato.
-                             countSpan.innerText = `${newVal}`; 
-                             // Wait, showTooltip will be called by onReport callback? Yes.
-                             // So actually we don't need complex DOM manipulation here, showTooltip re-renders everything!
-                             // BUT showTooltip re-renders HTML strings.
-                             // The 'click' listener is on the TOOLTIP element.
-                             // If showTooltip replaces innerHTML, the listener MIGHT receive 'isUpdate' and update content.
-                             // Wait, if showTooltip replaces innerHTML, the existing `actionBtn` variable is detached?
-                             // Yes. So this visual update is transient until onReport resolves and calls showTooltip.
-                             // So simpler is better.
-                             countSpan.innerText = newVal + ' (...)';
-                         }
-                    }
-
-                    // Atualizar contador global (Exceto Likes/Dislikes)
-                    if (!['votes_like', 'votes_dislike'].includes(signal)) {
-                        const userLimitEl = tooltip.querySelector('.as-user-limit-info b');
-                        if (userLimitEl) {
-                            let currentLimit = parseInt(userLimitEl.innerText || '0');
-                            userLimitEl.innerText = Math.max(0, currentLimit - 1);
-                        }
-
-                        // CRÍTICO: Decrementar contador persistente APENAS para reports
-                        if (adHash) {
-                            const voteCount = parseInt(localStorage.getItem(`as_vote_count_${adHash}`) || '0');
-                            localStorage.setItem(`as_vote_count_${adHash}`, Math.max(0, voteCount - 1));
-                        }
-                    }
-
-                    // Remover do localStorage (Mantém-se para saber o estado do botão)
-                    if (adHash) {
+                    const conflictList = CONFLICTS[signal];
+                    if (conflictList) {
                         try {
                             const savedVotes = JSON.parse(localStorage.getItem(`as_user_votes_${adHash}`) || '{}');
-                            delete savedVotes[signal];
-                            localStorage.setItem(`as_user_votes_${adHash}`, JSON.stringify(savedVotes));
-                        } catch (e) {
-                            console.warn('[Anti-Scam] Erro ao remover voto:', e);
-                        }
-                    }
-
-                    // Chamar onReport com delta negativo
-                    options.onReport(signal, -1);
-                    this.showFeedback(tooltip, 'Voto removido.', 'neutral');
-                    
-                } else {
-                    // === CHECK CONFLICTS (NOVO) ===
-                    if (adHash) {
-                        const CONFLICTING_VOTES = {
-                            'votes_new_profile': { conflict: 'votes_old_profile', label: 'Perfil antigo' },
-                            'votes_old_profile': { conflict: 'votes_new_profile', label: 'Perfil recente' },
-                            'votes_evasive': { conflict: 'votes_clear_answers', label: 'Respostas claras' },
-                            'votes_clear_answers': { conflict: 'votes_evasive', label: 'Respostas evasivas' },
-                            'votes_generic_images': { conflict: 'votes_original_photos', label: 'Fotos originais' },
-                            'votes_original_photos': { conflict: 'votes_generic_images', label: 'Imagens genéricas' },
-                            'votes_location_vague': { conflict: 'votes_location_confirmed', label: 'Local confirmado' },
-                            'votes_location_confirmed': { conflict: 'votes_location_vague', label: 'Localização vaga' }
-                        };
-
-                        const conflictData = CONFLICTING_VOTES[signal];
-                        if (conflictData) {
-                            try {
-                                const savedVotes = JSON.parse(localStorage.getItem(`as_user_votes_${adHash}`) || '{}');
-                                if (savedVotes[conflictData.conflict]) {
-                                    this.showFeedback(tooltip, `❌ Contradiz voto anterior: "${conflictData.label}"`, 'error');
-                                    // Efeito visual de erro (Shake)
-                                    actionBtn.animate([
-                                        { transform: 'translateX(0)' },
-                                        { transform: 'translateX(-5px)' },
-                                        { transform: 'translateX(5px)' },
-                                        { transform: 'translateX(0)' }
-                                    ], { duration: 300 });
-                                    // NÃO APLICA COOLDOWN AQUI
-                                    return; // IMPEDE O VOTO
-                                }
-                            } catch (e) {
-                                console.warn('[Conflict Check Error]', e);
+                            const found = (Array.isArray(conflictList) ? conflictList : [conflictList]).find(c => savedVotes[c]);
+                            if (found) {
+                                options.onReport(found, -1);
+                                delete savedVotes[found];
+                                localStorage.setItem(`as_user_votes_${adHash}`, JSON.stringify(savedVotes));
+                                this.showFeedback(tooltip, '🔄 Voto atualizado (Limpou contradição).', 'neutral');
                             }
-                        }
+                        } catch (e) {}
                     }
+                }
 
-                    // === SUCESSO: APLICA COOLDOWN AGORA (Exceto Likes) ===
-                     if (window.BotDetector && adHash && !['votes_like', 'votes_dislike'].includes(signal)) {
-                        window.BotDetector.reportState.adCooldowns[adHash] = Date.now();
-                        startCooldownUI(3);
+                // === VALIDAÇÃO DE LIMITE (após resolver conflitos) ===
+                if (window.BotDetector && adHash && !['votes_like', 'votes_dislike'].includes(signal)) {
+                    const check = window.BotDetector.canReport(adHash, signal);
+                    if (!check.allowed) {
+                        this.showFeedback(tooltip, check.reason, 'error');
+                        return; 
                     }
+                }
 
-                    // === ADICIONAR VOTO ===
+                if (window.BotDetector && cooldownSeconds > 0 && !['votes_like', 'votes_dislike'].includes(signal)) {
+                    window.BotDetector.reportState.adCooldowns[adHash] = Date.now() + (cooldownSeconds * 1000);
+                    startCooldownUI(cooldownSeconds);
+                }
                     actionBtn.classList.add('as-voted-anim', 'active');
                     
                     // Atualizar contagem visual
-                    const countSpan = actionBtn.querySelector('.as-btn-count');
-                    if (countSpan) {
+                    const countSpanAdd = actionBtn.querySelector('.as-btn-count');
+                    if (countSpanAdd) {
                          // NADA DE CHECKS - INCREMENTAR
-                         const currentText = countSpan.innerText;
-                         const match = currentText.match(/(\d+)/);
-                         const oldVal = match ? parseInt(match[1]) : 0;
-                         countSpan.innerText = `${oldVal + 1} (...)`;
-                         countSpan.style.display = 'inline-block';
+                         const currentTextAdd = countSpanAdd.innerText;
+                         const matchAdd = currentTextAdd.match(/(\d+)/);
+                         const oldVal = matchAdd ? parseInt(matchAdd[1]) : 0;
+                         countSpanAdd.innerText = `${oldVal + 1} (...)`;
+                         countSpanAdd.style.display = 'inline-block';
                     }
 
                     // Atualizar contador global VISUAL (Exceto Likes/Dislikes)
                     // NOTA: O incremento persistente (localStorage) é feito em BotDetector.registerReport
                     if (!['votes_like', 'votes_dislike'].includes(signal)) {
-                        const userLimitEl = tooltip.querySelector('.as-user-limit-info b');
-                        if (userLimitEl) {
-                            let currentLimit = parseInt(userLimitEl.innerText || '0');
-                            userLimitEl.innerText = currentLimit + 1;
+                        const userLimitElAdd = tooltip.querySelector('.as-user-limit-info b');
+                        if (userLimitElAdd) {
+                            let currentLimit = parseInt(userLimitElAdd.innerText || '0');
+                            userLimitElAdd.innerText = currentLimit + 1;
                         }
                         // REMOVIDO: Incremento duplicado aqui causava contador 2x
                         // O BotDetector.registerReport em content.js já faz: localStorage.setItem(`as_vote_count_${adHash}`, current + 1);
@@ -687,22 +721,46 @@ window.UIModule = {
                     this.showFeedback(tooltip, 'Voto registado!', 'success');
                 }
                 
-                return;
-            }
 
 
-            // 2. Botão 'Ver Mais'
-            const viewMoreBtn = e.target.closest('.as-view-more-link');
-            if (viewMoreBtn) {
+
+
+
+
+            // 4. Lógica de Likes/Dislikes (Delegation)
+            const likeBtn = e.target.closest('.as-like-btn');
+            const dislikeBtn = e.target.closest('.as-dislike-btn');
+
+            if (likeBtn || dislikeBtn) {
                 e.preventDefault();
                 e.stopPropagation();
-                const container = viewMoreBtn.parentElement;
-                container.querySelectorAll('.as-btn-hidden').forEach(b => {
-                    b.style.display = 'flex';
-                    b.classList.remove('as-btn-hidden');
-                    b.style.animation = 'fadeIn 0.3s ease';
-                });
-                viewMoreBtn.remove();
+
+                const type = likeBtn ? 'votes_like' : 'votes_dislike';
+                const opposite = likeBtn ? 'votes_dislike' : 'votes_like';
+                const savedVotes = JSON.parse(localStorage.getItem(`as_user_votes_${adHash}`) || '{}');
+                const previousVote = savedVotes['votes_like'] ? 'votes_like' : (savedVotes['votes_dislike'] ? 'votes_dislike' : null);
+                
+                // Cenário 1: Remover voto (toggle)
+                if (previousVote === type) {
+                    options.onReport(type, -1);
+                    delete savedVotes[type];
+                    localStorage.setItem(`as_user_votes_${adHash}`, JSON.stringify(savedVotes));
+                    this.showFeedback(tooltip, 'Voto removido.', 'neutral');
+                    return;
+                }
+
+                // Cenário 2: Mudar voto (Swap) - REGRA DE OURO: 1 por anúncio
+                if (previousVote && previousVote !== type) {
+                    options.onReport(previousVote, -1);
+                    delete savedVotes[previousVote];
+                }
+
+                // Cenário 3: Novo voto
+                options.onReport(type, 1);
+                savedVotes[type] = true;
+                localStorage.setItem(`as_user_votes_${adHash}`, JSON.stringify(savedVotes));
+                
+                this.showFeedback(tooltip, type === 'votes_like' ? 'Gostaste!' : 'Não gostaste.', 'success');
                 return;
             }
         });
@@ -712,77 +770,77 @@ window.UIModule = {
         const commentSubmit = tooltip.querySelector('.as-comment-submit');
         const commentsList = tooltip.querySelector('.as-comments-list');
 
-        // Lógica de Tabs v2.0
-        tooltip.querySelectorAll('.as-tab-btn').forEach(btn => {
-            btn.onclick = () => {
-                // Remove active de tudo
-                tooltip.querySelectorAll('.as-tab-btn').forEach(b => b.classList.remove('active'));
-                tooltip.querySelectorAll('.as-tab-content').forEach(c => c.classList.remove('active'));
+        // Lógica de Tabs v2.0 ANTIGA REMOVIDA (Substituída por Delegação)
+        // tooltip.querySelectorAll('.as-tab-btn').forEach(btn => {
+        //     btn.onclick = () => {
+        //         // Remove active de tudo
+        //         tooltip.querySelectorAll('.as-tab-btn').forEach(b => b.classList.remove('active'));
+        //         tooltip.querySelectorAll('.as-tab-content').forEach(c => c.classList.remove('active'));
                 
-                // Ativa atual
-                btn.classList.add('active');
-                const tabId = `as-tab-${btn.dataset.tab}`;
-                const content = tooltip.querySelector(`#${tabId}`);
-                if (content) content.classList.add('active');
-            };
-        });
+        //         // Ativa atual
+        //         btn.classList.add('active');
+        //         const tabId = `as-tab-${btn.dataset.tab}`;
+        //         const content = tooltip.querySelector(`#${tabId}`);
+        //         if (content) content.classList.add('active');
+        //     };
+        // });
 
-        // Lógica de Likes/Dislikes
-        const likeBtn = tooltip.querySelector('.as-like-btn');
-        const dislikeBtn = tooltip.querySelector('.as-dislike-btn');
+        // Lógica de Likes/Dislikes ANTIGA REMOVIDA (Substituída por Delegação)
+        // const likeBtn = tooltip.querySelector('.as-like-btn');
+        // const dislikeBtn = tooltip.querySelector('.as-dislike-btn');
 
-        if (likeBtn && dislikeBtn) {
-            // Ler estado inicial do utilizador
-            const storageKey = `as_vote_${adHash}`;
-            const currentVote = localStorage.getItem(storageKey); // 'votes_like' | 'votes_dislike' | null
+        // if (likeBtn && dislikeBtn) {
+        //     // Ler estado inicial do utilizador
+        //     const storageKey = `as_vote_${adHash}`;
+        //     const currentVote = localStorage.getItem(storageKey); // 'votes_like' | 'votes_dislike' | null
 
-            // Atualiza UI inicial
-            if (currentVote === 'votes_like') likeBtn.classList.add('as-btn-voted');
-            if (currentVote === 'votes_dislike') dislikeBtn.classList.add('as-btn-voted');
+        //     // Atualiza UI inicial
+        //     if (currentVote === 'votes_like') likeBtn.classList.add('as-btn-voted');
+        //     if (currentVote === 'votes_dislike') dislikeBtn.classList.add('as-btn-voted');
 
-            const handleVote = (type) => {
-                const previousVote = localStorage.getItem(storageKey);
+        //     const handleVote = (type) => {
+        //         const previousVote = localStorage.getItem(storageKey);
                 
-                // Cenário 1: Remover voto (toggle)
-                if (previousVote === type) {
-                    options.onReport(type, -1);
-                    localStorage.removeItem(storageKey);
+        //         // Cenário 1: Remover voto (toggle)
+        //         if (previousVote === type) {
+        //             options.onReport(type, -1);
+        //             localStorage.removeItem(storageKey);
                     
-                    if (type === 'votes_like') likeBtn.classList.remove('as-btn-voted', 'as-voted-anim');
-                    if (type === 'votes_dislike') dislikeBtn.classList.remove('as-btn-voted', 'as-voted-anim');
+        //             if (type === 'votes_like') likeBtn.classList.remove('as-btn-voted', 'as-voted-anim');
+        //             if (type === 'votes_dislike') dislikeBtn.classList.remove('as-btn-voted', 'as-voted-anim');
                     
-                    this.showFeedback(tooltip, 'Voto removido.', 'neutral');
-                    return;
-                }
+        //             this.showFeedback(tooltip, 'Voto removido.', 'neutral');
+        //             return;
+        //         }
 
-                // Cenário 2: Mudar voto (Swap)
-                if (previousVote && previousVote !== type) {
-                    // Remove anterior
-                    options.onReport(previousVote, -1);
-                    if (previousVote === 'votes_like') likeBtn.classList.remove('as-btn-voted');
-                    if (previousVote === 'votes_dislike') dislikeBtn.classList.remove('as-btn-voted');
-                }
+        //         // Cenário 2: Mudar voto (Swap)
+        //         if (previousVote && previousVote !== type) {
+        //             // Remove anterior
+        //             options.onReport(previousVote, -1);
+        //             if (previousVote === 'votes_like') likeBtn.classList.remove('as-btn-voted');
+        //             if (previousVote === 'votes_dislike') dislikeBtn.classList.remove('as-btn-voted');
+        //         }
 
-                // Cenário 3: Novo voto (ou continuação do swap)
-                options.onReport(type, 1);
-                localStorage.setItem(storageKey, type);
+        //         // Cenário 3: Novo voto (ou continuação do swap)
+        //         options.onReport(type, 1);
+        //         localStorage.setItem(storageKey, type);
 
-                // UI Updates
-                if (type === 'votes_like') {
-                    likeBtn.classList.add('as-btn-voted', 'as-voted-anim');
-                    dislikeBtn.classList.remove('as-btn-voted'); // Safety
-                }
-                if (type === 'votes_dislike') {
-                    dislikeBtn.classList.add('as-btn-voted', 'as-voted-anim');
-                    likeBtn.classList.remove('as-btn-voted'); // Safety
-                }
+        //         // UI Updates
+        //         if (type === 'votes_like') {
+        //             likeBtn.classList.add('as-btn-voted', 'as-voted-anim');
+        //             dislikeBtn.classList.remove('as-btn-voted'); // Safety
+        //         }
+        //         if (type === 'votes_dislike') {
+        //             dislikeBtn.classList.add('as-btn-voted', 'as-voted-anim');
+        //             likeBtn.classList.remove('as-btn-voted'); // Safety
+        //         }
                 
-                this.showFeedback(tooltip, type === 'votes_like' ? 'Gostaste deste anúncio!' : 'Não gostaste deste anúncio.', 'success');
-            };
+        //         this.showFeedback(tooltip, type === 'votes_like' ? 'Gostaste deste anúncio!' : 'Não gostaste deste anúncio.', 'success');
+        //     };
 
-            likeBtn.onclick = () => handleVote('votes_like');
-            dislikeBtn.onclick = () => handleVote('votes_dislike');
-        }
+        //     likeBtn.onclick = () => handleVote('votes_like');
+        //     dislikeBtn.onclick = () => handleVote('votes_dislike');
+        // }
 
         if (commentInput && commentSubmit) {
             const submitComment = async () => {
@@ -827,22 +885,8 @@ window.UIModule = {
         }
 
         // Lógica "Ver Mais" (Delegation Robust para garantir funcionamento sempre)
-        tooltip.addEventListener('click', (e) => {
-            const btn = e.target.closest('.as-view-more-link');
-            if (btn) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                const container = btn.parentElement;
-                container.querySelectorAll('.as-btn-hidden').forEach(b => {
-                    b.style.display = 'flex'; // Restaura display original
-                    b.classList.remove('as-btn-hidden');
-                    b.style.animation = 'fadeIn 0.3s ease';
-                });
-                
-                btn.remove(); // Remove o botão "Ver mais"
-            }
-        });
+        // Listenter redundante removido para evitar crash
+        // (A lógica de Ver Mais já é tratada no listener principal de delegação)
     },
 
     /**
@@ -885,18 +929,29 @@ window.UIModule = {
      * @param {Array} buttonsConfig - Configuração dos botões
      * @param {Object} signals - Sinais atuais
      */
-    renderButtons(buttons, cs) {
+    renderButtons(buttons, cs, tabId = '') {
         if (!buttons || buttons.length === 0) return '<div style="grid-column:1/-1; color:#9ca3af; font-size:10px; text-align:center;">Nenhuma opção disponível.</div>';
         
-        const limit = 6;
+        // Usa o estado de expansão específico da aba ou false por padrão
+        const isTabExpanded = this.expandedTabs[tabId] || false;
+        const limit = isTabExpanded ? buttons.length : 6;
         let html = '';
         
         // Calcular total para percentagens
         const totalVotes = cs.total_votes || 0;
         
+        // Recuperar votos locais do utilizador para marcar como "active"
+        let localUserVotes = {};
+        if (this.currentHash) {
+            try {
+                localUserVotes = JSON.parse(localStorage.getItem(`as_user_votes_${this.currentHash}`) || '{}');
+            } catch (e) {}
+        }
+        
         buttons.forEach((btn, index) => {
             const count = cs[btn.signal] || 0;
-            const userVoted = (cs.user_votes && cs.user_votes[btn.signal]); 
+            // Usa dados locais se disponíveis, senão tenta do objeto cs (para compatibilidade)
+            const userVoted = localUserVotes[btn.signal] || (cs.user_votes && cs.user_votes[btn.signal]); 
             
             // Percentagem
             const percent = (totalVotes > 0) ? Math.round((count / totalVotes) * 100) : 0;
@@ -925,9 +980,10 @@ window.UIModule = {
             </button>`;
         });
 
-        if (buttons.length > limit) {
-             html += `<button class="as-view-more-link" style="grid-column: 1 / -1; margin-top:8px; background:#f9fafb; border:1px solid #d1d5db; border-radius:4px; color:#374151; font-weight:700; font-size:11px; cursor:pointer; padding:8px; width:100%; transition:all 0.2s; text-align:center;">
-                Ver mais opções (${buttons.length - limit}) ↓
+        if (buttons.length > 6) { // Mostra toggle se houver mais que o limite base (6)
+             const label = isTabExpanded ? `Ver menos opções ↑` : `Ver mais opções (${buttons.length - 6}) ↓`;
+             html += `<button class="as-view-more-link" data-tab="${tabId}" style="grid-column: 1 / -1; margin-top:8px; background:#f9fafb; border:1px solid #d1d5db; border-radius:4px; color:#374151; font-weight:700; font-size:11px; cursor:pointer; padding:8px; width:100%; transition:all 0.2s; text-align:center;">
+                ${label}
              </button>`;
         }
 

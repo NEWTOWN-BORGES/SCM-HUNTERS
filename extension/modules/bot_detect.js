@@ -114,10 +114,10 @@ window.BotDetector = {
             };
         }
 
-        // 4. Cooldown por anúncio (evita duplo clique rápido)
-        const lastReport = this.reportState.adCooldowns[adHash];
-        if (lastReport && (now - lastReport) < this.CONFIG.REPORT_COOLDOWN_MS) {
-            const remaining = Math.ceil((this.CONFIG.REPORT_COOLDOWN_MS - (now - lastReport)) / 1000);
+        // 4. Cooldown por anúncio (Baseado em Expiry)
+        const expiry = this.reportState.adCooldowns[adHash];
+        if (expiry && now < expiry) {
+            const remaining = Math.ceil((expiry - now) / 1000);
             return { 
                 allowed: false, 
                 reason: `Aguarde ${remaining}s para votar novamente.` 
@@ -132,9 +132,9 @@ window.BotDetector = {
      */
     getCooldownRemaining(adHash) {
         const now = Date.now();
-        const lastReport = this.reportState.adCooldowns[adHash];
-        if (lastReport && (now - lastReport) < this.CONFIG.REPORT_COOLDOWN_MS) {
-            return Math.ceil((this.CONFIG.REPORT_COOLDOWN_MS - (now - lastReport)) / 1000);
+        const expiry = this.reportState.adCooldowns[adHash];
+        if (expiry && now < expiry) {
+            return Math.ceil((expiry - now) / 1000);
         }
         return 0;
     },
@@ -147,18 +147,31 @@ window.BotDetector = {
     },
 
     /**
-     * Regista um report (para tracking anti-abuso).
+     * Regista uma alteração de voto (adição ou remoção).
+     * @param {string} adHash 
+     * @param {number} delta - 1 para adição, -1 para remoção
+     */
+    registerVoteChange(adHash, delta) {
+        if (delta > 0) {
+            this.reportState.reportsThisMinute++;
+            this.reportState.sessionReportCount++;
+            
+            // NOTA: O Cooldown agora é gerido dinamicamente pelo UIModule (ui.js)
+            // baseado na cor/risco do botão. Removido o cooldown fixo de 3s daqui.
+        }
+
+        // Atualiza contador persistente (as_vote_count)
+        const current = parseInt(localStorage.getItem(`as_vote_count_${adHash}`) || '0');
+        const newVal = Math.max(0, current + delta);
+        localStorage.setItem(`as_vote_count_${adHash}`, newVal);
+    },
+
+    /**
+     * Regista um report (para compatibilidade e tracking anti-abuso).
      * @param {string} adHash 
      */
     registerReport(adHash) {
-        const now = Date.now();
-        this.reportState.reportsThisMinute++;
-        this.reportState.adCooldowns[adHash] = now;
-        this.reportState.sessionReportCount++;
-        
-        // Incrementa contador persistente
-        const current = parseInt(localStorage.getItem(`as_vote_count_${adHash}`) || '0');
-        localStorage.setItem(`as_vote_count_${adHash}`, current + 1);
+        this.registerVoteChange(adHash, 1);
     },
 
     /**
