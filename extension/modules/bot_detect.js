@@ -87,6 +87,7 @@ window.BotDetector = {
      * @returns {Object} { allowed: boolean, reason: string }
      */
     canReport(adHash, signalType) {
+        const now = Date.now();
         // BYPASS: Likes e Dislikes não têm limites
         if (signalType && ['votes_like', 'votes_dislike'].includes(signalType)) {
             return { allowed: true };
