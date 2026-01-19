@@ -8,6 +8,7 @@ window.SiteConfigs.push(
             title: '[data-cy="ad_title"], [data-testid="ad_title"], h1', 
             price: '[data-testid="ad-price-container"] h3, [data-testid="ad-price-container"], [data-testid="ad-price"], h3', 
             description: 'div[data-cy="ad_description"], [data-testid="ad-description"]',
+            views: 'span[data-testid="ad-views"], .css-17it79k', // OLX view stats
             insertTarget: '[data-testid="ad-price-container"], [data-testid="ad-price"], h1',
             insertPosition: 'afterend'
         },

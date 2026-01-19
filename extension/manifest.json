@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SCM HUNTERS",
-  "version": "2.0",
-  "description": "Detecta e alerta sobre anúncios imobiliários suspeitos.",
+  "version": "2.1",
+  "description": "Ferramenta de análise comunitária de padrões em Imobiliário, Automóvel e E-commerce (OLX, Standvirtual, AliExpress, etc).",
   "permissions": [
     "storage",
     "activeTab",
@@ -21,6 +21,7 @@
         "modules/storage.js", 
         "modules/ui.js", 
         "modules/bot_detect.js", 
+        "modules/trust_manager.js", 
         "modules/behavior_tracker.js", 
         "modules/ad_analyzer.js", 
         "modules/sites/general.js",

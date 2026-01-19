@@ -12,7 +12,10 @@ window.BotDetector = {
         scrollEvents: 0,
         mouseDistance: 0,
         lastMousePos: { x: 0, y: 0 },
-        sessionStart: Date.now()
+        sessionStart: Date.now(),
+        suspicionLevel: 0,              // Nível de suspeição (0-100)
+        lastSuspicionDecay: Date.now(),
+        voteToggleHistory: {}           // { adHash_signal: { lastAction, timestamp, count } }
     },
 
     // Configuração anti-abuso
@@ -89,7 +92,8 @@ window.BotDetector = {
             return { allowed: true };
         }
 
-        const now = Date.now();
+        // 0. Decay suspicion over time (1 point per 5s)
+        this.decaySuspicion();
 
         // 1. Limite absoluto por anúncio (Persistente)
         const voteCount = parseInt(localStorage.getItem(`as_vote_count_${adHash}`) || '0');
@@ -108,19 +112,21 @@ window.BotDetector = {
 
         // 3. Rate limit global
         if (this.reportState.reportsThisMinute >= this.CONFIG.MAX_REPORTS_PER_MINUTE) {
+            this.addSuspicion(10, 'global_rate_limit');
             return { 
                 allowed: false, 
                 reason: 'Muitos votos. Aguarde um minuto.' 
             };
         }
 
-        // 4. Cooldown por anúncio (Baseado em Expiry)
+        // 4. Cooldown dinâmico por anúncio (Step 6)
         const expiry = this.reportState.adCooldowns[adHash];
         if (expiry && now < expiry) {
             const remaining = Math.ceil((expiry - now) / 1000);
+            this.addSuspicion(5, 'cooldown_spam');
             return { 
                 allowed: false, 
-                reason: `Aguarde ${remaining}s para votar novamente.` 
+                reason: `Integridade ativa. Aguarde ${remaining}s.` 
             };
         }
 
@@ -151,19 +157,71 @@ window.BotDetector = {
      * @param {string} adHash 
      * @param {number} delta - 1 para adição, -1 para remoção
      */
-    registerVoteChange(adHash, delta) {
+    registerVoteChange(adHash, delta, signalType = 'unknown') {
+        const now = Date.now();
         if (delta > 0) {
             this.reportState.reportsThisMinute++;
             this.reportState.sessionReportCount++;
             
-            // NOTA: O Cooldown agora é gerido dinamicamente pelo UIModule (ui.js)
-            // baseado na cor/risco do botão. Removido o cooldown fixo de 3s daqui.
+            // Auditoria de Velocidade (Step 6)
+            if (this.metrics.lastClickTime !== 0 && (now - this.metrics.lastClickTime) < 2000) {
+                this.addSuspicion(15, 'fast_report');
+            }
         }
+
+        // Auditoria de Toggling (Vota/Remove repetido)
+        const toggleKey = `${adHash}_${signalType}`;
+        const history = this.metrics.voteToggleHistory[toggleKey] || { lastAction: 0, timestamp: 0, count: 0 };
+        
+        if (now - history.timestamp < 10000) { // Se ação repetida no mesmo sinal em < 10s
+            history.count++;
+            if (history.count > 2) {
+                this.addSuspicion(20, 'vote_toggling');
+            }
+        } else {
+            history.count = 1;
+        }
+        history.timestamp = now;
+        history.lastAction = delta;
+        this.metrics.voteToggleHistory[toggleKey] = history;
 
         // Atualiza contador persistente (as_vote_count)
         const current = parseInt(localStorage.getItem(`as_vote_count_${adHash}`) || '0');
         const newVal = Math.max(0, current + delta);
         localStorage.setItem(`as_vote_count_${adHash}`, newVal);
+    },
+
+    /**
+     * Adiciona nível de suspeição e comunica com TrustManager se necessário.
+     */
+    addSuspicion(points, reason) {
+        this.metrics.suspicionLevel = Math.min(100, this.metrics.suspicionLevel + points);
+        if (points >= 15 && window.TrustManager) {
+            window.TrustManager.recordAction('spam_attempt');
+        }
+        console.warn(`[BotDetector] Suspeição +${points} (${reason}). Nível: ${this.metrics.suspicionLevel}`);
+    },
+
+    /**
+     * Diminui suspeição ao longo do tempo (1 ponto a cada 5s).
+     */
+    decaySuspicion() {
+        const now = Date.now();
+        const elapsed = now - this.metrics.lastSuspicionDecay;
+        if (elapsed > 5000) {
+            const pointsToDecay = Math.floor(elapsed / 5000);
+            this.metrics.suspicionLevel = Math.max(0, this.metrics.suspicionLevel - pointsToDecay);
+            this.metrics.lastSuspicionDecay = now;
+        }
+    },
+
+    /**
+     * Retorna cooldown dinâmico baseado no nível de suspeição (Step 6).
+     */
+    getDynamicCooldown(baseSeconds) {
+        // Multiplicador: 1.0 (0 suspeição) até ~6.0 (100 suspeição)
+        const multiplier = 1 + (this.metrics.suspicionLevel / 20);
+        return Math.floor(baseSeconds * multiplier);
     },
 
     /**
@@ -200,14 +258,23 @@ window.BotDetector = {
      * Peso decai com reports subsequentes e suspeição.
      */
     getWeightMultiplier() {
-        // Penaliza bots severamente
-        if (this.checkSuspicion()) return 0.1;
+        // 1. Penaliza bots e suspeição alta severamente
+        if (this.checkSuspicion()) {
+             // Peso decai linearmente com a suspeição quando está em modo crítico
+             const suspicionFactor = Math.max(0.1, 1 - (this.metrics.suspicionLevel / 100));
+             return 0.1 * suspicionFactor;
+        }
         
-        // Peso dinâmico: primeiro report = 100%, subsequentes decaem
+        // 2. Peso dinâmico baseado em volume de sessão
         const reportCount = this.reportState.sessionReportCount;
         let weight = this.CONFIG.FIRST_REPORT_WEIGHT - 
                      (reportCount * this.CONFIG.WEIGHT_DECAY);
         
+        // 3. Ajuste fino pela suspeição (mesmo se não for "bot" oficial)
+        if (this.metrics.suspicionLevel > 20) {
+            weight *= (1 - (this.metrics.suspicionLevel / 200));
+        }
+
         return Math.max(this.CONFIG.MIN_WEIGHT, weight);
     },
 
@@ -273,6 +340,56 @@ window.BotDetector = {
                 delete this.reportState.adCooldowns[hash];
             }
         }
+    },
+
+    /**
+     * Retorna o peso inerente de um sinal específico.
+     * @param {string} signalType 
+     * @returns {number}
+     */
+    getSignalBaseWeight(signalType) {
+        // 1. Sinais CRÍTICOS (Risco Máximo)
+        const critical = [
+            'votes_no_response', 'votes_external_contact', 'votes_advance_payment',
+            'votes_fake_item', 'votes_deposit_no_visit', 'votes_off_platform',
+            'votes_not_owner', 'votes_no_visit_allowed', 'votes_cloned_listing',
+            'votes_property_different', 'votes_mbway_scam', 'votes_fake_proof',
+            'votes_sms_code', 'votes_foreign_shipping', 'votes_suspicious_link',
+            'votes_cloned_ad', 'votes_fake_profile', 'votes_deposit_before_see',
+            'votes_fake_payment_proof', 'votes_abroad_car', 'votes_accident_hidden',
+            'votes_debts_hidden', 'votes_fake_courier', 'votes_phishing', 'votes_external_payment'
+        ];
+
+        // 2. Sinais de AVISO (Amarelo)
+        const warning = [
+            'votes_price_too_good', 'votes_unrealistic_price', 'votes_repost',
+            'votes_conditions_changed', 'votes_pressure', 'votes_evasive',
+            'votes_location_vague', 'votes_generic_images', 'votes_new_profile',
+            'votes_inconsistent', 'votes_too_cheap', 'votes_ai_photos',
+            'votes_targets_foreigners', 'votes_bad_portuguese', 'votes_address_fishing',
+            'votes_only_whatsapp', 'votes_km_suspect', 'votes_no_test_drive',
+            'votes_docs_incomplete', 'votes_pressure_sale'
+        ];
+
+        // 3. Sinais POSITIVOS (Verde)
+        const positive = [
+            'votes_visit_available', 'votes_visit_done', 'votes_saw_car',
+            'votes_test_drive_ok', 'votes_mechanic_check', 'votes_hand_delivery',
+            'votes_product_ok', 'votes_mail_ok', 'votes_docs_shown',
+            'votes_docs_ok', 'votes_docs_complete', 'votes_location_confirmed',
+            'votes_location_matches', 'votes_real_owner', 'votes_owner_real',
+            'votes_old_profile', 'votes_legit_profile', 'votes_trusted_seller',
+            'votes_trusted_stand', 'votes_history_clear', 'votes_original_photos',
+            'votes_real_photos', 'votes_legit', 'votes_clear_answers',
+            'votes_clear_communication', 'votes_communication', 'votes_normal_interaction',
+            'votes_responsive', 'votes_clear_process', 'votes_fair_price'
+        ];
+
+        if (critical.includes(signalType)) return 1.5;
+        if (warning.includes(signalType)) return 1.2;
+        if (positive.includes(signalType)) return 1.0;
+        
+        return 0.8; // Neutro / Outros
     },
 
     /**

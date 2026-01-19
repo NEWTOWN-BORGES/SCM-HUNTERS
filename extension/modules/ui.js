@@ -63,7 +63,8 @@ window.UIModule = {
             container.appendChild(qualityBadge);
         }
 
-        container.title = `Risco: ${data.risk_score} | Qualidade: ${data.quality_score}`;
+        const state = window.StorageModule ? window.StorageModule.getQualitativeState(data) : { label: 'Em análise' };
+        container.title = `Estado: ${state.label} | ${state.description}`;
         
         // Interaction Logic: Hover (temporário) vs Click (fixo)
         let hoverTimeout;
@@ -177,30 +178,20 @@ window.UIModule = {
             const riskButtons = allButtons.filter(b => b.tab === 'risk');
             const positiveButtons = allButtons.filter(b => b.tab === 'positive');
 
-            // Nível de Confiança (Beta 3 Step 2)
-            let confLevel = 'Baixa';
-            let confIcon = '🔹';
-            const sigs = data.analysis?.signals || {};
-            const tVotes = cs.total_votes || 0;
-            
-            if ((sigs.textLength > 300 && sigs.photoCount >= 3) || tVotes > 2) {
-                confLevel = 'Moderada';
-                confIcon = '🔸';
-            }
-            if (tVotes > 10 || (sigs.textLength > 800 && sigs.photoCount > 8)) {
-                confLevel = 'Alta';
-                confIcon = '⭐';
-            }
+            // Nível de Confiança (Maturity Ladder)
+            const confMap = {
+                'low': { label: 'Incipiente', icon: '🔹' },
+                'medium': { label: 'Moderada', icon: '🔸' },
+                'high': { label: 'Elevada', icon: '⭐' }
+            };
+            const currentConf = confMap[explanation.confidence || 'low'];
+            const confLevel = currentConf.label;
+            const confIcon = currentConf.icon;
 
-            // Score Handling (Beta 3.1)
-            const rawScore = data.score !== undefined ? data.score : data.risk_score;
-            // FIX: Removida lógica de esconder scores baixos. Se é 0, mostra 0.
-            const isScoreUnreliable = false; 
-            const scoreDisplay = Math.round(rawScore);
-            // Ajustar cor do anel para cinzento se não for fiável
-            const finalRingColor = isScoreUnreliable ? '#d1d5db' : riskColor; 
-            const finalRingBg = isScoreUnreliable ? '#f3f4f6' : finalRingColor;
-            const finalRingText = isScoreUnreliable ? '#9ca3af' : 'white';
+            // Qualitative State Handling (Step 2 Roadmap)
+            const state = explanation.state || { label: 'Dados Insuficientes', color: '#94a3b8', class: 'as-state-neutral' };
+            const stateBg = state.color;
+            const stateText = 'white';
 
             // Subtitle Handling (Evitar undefined)
             const subtitleText = explanation.subtitle || 'Anúncio recente · Padrões em análise';
@@ -212,16 +203,15 @@ window.UIModule = {
                 </div>
                 
                  <div class="as-header-content">
-                    <div class="as-score-ring" title="Indicador Global" style="background: ${finalRingBg}; color: ${finalRingText}; display:flex; align-items:center; justify:center; width: 40px; height: 40px; border-radius:50%; font-weight:bold; border: 2px solid ${finalRingColor}; box-sizing:border-box;">${scoreDisplay}</div>
-                    <div class="as-header-text" style="margin-left: 10px;">
-                        <span class="as-label-mini" style="display:block; font-size:9px; text-transform:uppercase; color:#9ca3af; font-weight:600;">Indicador Global</span>
-                        <span class="as-title" style="display:block; font-weight:700;">${explanation.title || 'Análise de Anúncio'}</span>
-                        <span class="as-subtitle" style="font-size:11px; color:#666;">
-                            ${subtitleText} <span style="opacity:0.6; margin-left:4px;">· Preliminar</span>
+                    <div class="as-state-badge ${state.class}" style="background: ${stateBg}; color: ${stateText}; padding: 4px 12px; border-radius: 6px; font-weight: 800; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; box-shadow: 0 4px 12px -2px ${stateBg}44;">
+                        ${state.label}
+                    </div>
+                    <div class="as-header-text" style="margin-left: 14px;">
+                        <span class="as-label-mini" style="display:block; font-size:9px; text-transform:uppercase; color:#9ca3af; font-weight:600;">Confiança: ${confIcon} ${confLevel}</span>
+                        <span class="as-title" style="display:block; font-weight:700;">Diagnóstico SCM Hunters</span>
+                        <span class="as-subtitle" style="font-size:11px; color:#94a3b8; opacity:0.9;">
+                            ${state.description}
                         </span>
-                        <div class="as-confidence-level" style="font-size:10px; color:#6b7280; margin-top:2px;">
-                            ${confIcon} Confiança <b>${confLevel}</b>
-                        </div>
                     </div>
                 </div>
 
@@ -253,9 +243,9 @@ window.UIModule = {
                         </div>
                     </div>
                     <div class="as-total-votes-label">
-                        <span title="Pessoas que participaram">👥 ${cs.users_count || (cs.total_votes > 0 ? 1 : 0)}</span>
+                        <span title="Pessoas que participaram">👥 ${Math.round(cs.users_count || (cs.total_votes > 0 ? 1 : 0))}</span>
                         <span style="opacity:0.5; margin:0 4px;">|</span>
-                        <span title="Total de reações">💬 ${cs.total_votes || 0}</span>
+                        <span title="Total de reações">💬 ${Math.round(cs.total_votes || 0)}</span>
                     </div>
                     <div class="as-user-limit-info">Interações registadas: <b>${userVotes}</b></div>
                     <div class="as-cooldown-timer" style="display:none">Próximo voto em: <span class="as-timer-val">30</span>s</div>
@@ -293,7 +283,7 @@ window.UIModule = {
                 
                 <!-- FOOTER -->
                 <div class="as-disclaimer" style="font-size:10px; color:#9ca3af; text-align:center; padding:8px 12px; border-top:1px solid #e5e7eb; margin-top:auto; background:#f9fafb;">
-                    Esta análise identifica padrões observáveis. Não verifica identidade, legitimidade ou intenção.
+                    Esta análise baseia-se em padrões observáveis e registos comunitários. A decisão final e verificação de segurança cabem sempre ao utilizador.
                 </div>
             `;
 
@@ -586,6 +576,11 @@ window.UIModule = {
                             const saved = JSON.parse(localStorage.getItem(`as_user_votes_${adHash}`) || '{}');
                             delete saved[signal];
                             localStorage.setItem(`as_user_votes_${adHash}`, JSON.stringify(saved));
+                            
+                            // Regista remoção no BotDetector (Auditoria de Toggling)
+                            if (window.BotDetector) {
+                                window.BotDetector.registerVoteChange(adHash, -1, signal);
+                            }
                         } catch (e) {}
                     }
                     this.showFeedback(tooltip, 'Voto removido.', 'neutral');
@@ -615,59 +610,13 @@ window.UIModule = {
                 if (window.BotDetector && adHash && cooldownSeconds > 0) {
                     const cooldownRem = window.BotDetector.getCooldownRemaining(adHash);
                     if (cooldownRem > 0) {
-                        this.showFeedback(tooltip, `Aguarda ${cooldownRem}s.`, 'warning');
+                        this.showFeedback(tooltip, `Integridade ativa. Aguarde ${cooldownRem}s.`, 'warning');
                         startCooldownUI(cooldownRem);
                         return;
                     }
                 }
 
-                // === CHECK CONFLICTS & AUTO-RESOLVE (Swaps) ===
-                if (adHash && !['votes_like', 'votes_dislike'].includes(signal)) {
-                    const CONFLICTS = {
-                        'votes_new_profile': ['votes_old_profile', 'votes_trusted_seller', 'votes_legit_profile'],
-                        'votes_old_profile': ['votes_new_profile', 'votes_fake_profile'],
-                        'votes_trusted_seller': ['votes_new_profile', 'votes_fake_profile'],
-                        'votes_fake_profile': ['votes_old_profile', 'votes_trusted_seller', 'votes_legit_profile'],
-                        'votes_evasive': ['votes_clear_answers', 'votes_responsive', 'votes_clear_communication'],
-                        'votes_no_response': ['votes_responsive', 'votes_clear_communication', 'votes_negotiation_ok'],
-                        'votes_generic_images': ['votes_real_photos', 'votes_original_photos'],
-                        'votes_ai_photos': ['votes_real_photos', 'votes_original_photos'],
-                        'votes_cloned_listing': ['votes_real_photos', 'votes_original_photos'],
-                        'votes_real_photos': ['votes_generic_images', 'votes_ai_photos', 'votes_cloned_listing', 'votes_fake_photo'],
-                        'votes_original_photos': ['votes_generic_images', 'votes_ai_photos', 'votes_cloned_listing', 'votes_fake_photo'],
-                        'votes_location_vague': ['votes_location_confirmed', 'votes_location_matches'],
-                        'votes_location_confirmed': ['votes_location_vague'],
-                        'votes_location_matches': ['votes_vague_location', 'votes_property_different'],
-                        'votes_property_different': ['votes_location_matches'],
-                        'votes_visit_available': ['votes_no_visit_allowed', 'votes_deposit_no_visit', 'votes_advance_payment'],
-                        'votes_no_visit_allowed': ['votes_visit_available', 'votes_visit_done'],
-                        'votes_deposit_no_visit': ['votes_visit_available', 'votes_visit_done'],
-                        'votes_visit_done': ['votes_no_visit_allowed', 'votes_deposit_no_visit', 'votes_fake_item'],
-                        'votes_docs_shown': ['votes_docs_incomplete', 'votes_not_owner'],
-                        'votes_docs_ok': ['votes_docs_incomplete', 'votes_not_owner'],
-                        'votes_docs_incomplete': ['votes_docs_shown', 'votes_docs_ok', 'votes_docs_complete'],
-                        'votes_real_owner': ['votes_not_owner', 'votes_fake_item'],
-                        'votes_not_owner': ['votes_real_owner', 'votes_docs_ok', 'votes_visit_done'],
-                        'votes_docs_complete': ['votes_docs_incomplete', 'votes_no_docs'],
-                        'votes_no_docs': ['votes_docs_complete']
-                    };
-
-                    const conflictList = CONFLICTS[signal];
-                    if (conflictList) {
-                        try {
-                            const savedVotes = JSON.parse(localStorage.getItem(`as_user_votes_${adHash}`) || '{}');
-                            const found = (Array.isArray(conflictList) ? conflictList : [conflictList]).find(c => savedVotes[c]);
-                            if (found) {
-                                options.onReport(found, -1);
-                                delete savedVotes[found];
-                                localStorage.setItem(`as_user_votes_${adHash}`, JSON.stringify(savedVotes));
-                                this.showFeedback(tooltip, '🔄 Voto atualizado (Limpou contradição).', 'neutral');
-                            }
-                        } catch (e) {}
-                    }
-                }
-
-                // === VALIDAÇÃO DE LIMITE (após resolver conflitos) ===
+                // === VALIDAÇÃO DE LIMITE (após resolver contextos e conflitos) ===
                 if (window.BotDetector && adHash && !['votes_like', 'votes_dislike'].includes(signal)) {
                     const check = window.BotDetector.canReport(adHash, signal);
                     if (!check.allowed) {
@@ -677,32 +626,106 @@ window.UIModule = {
                 }
 
                 if (window.BotDetector && cooldownSeconds > 0 && !['votes_like', 'votes_dislike'].includes(signal)) {
-                    window.BotDetector.reportState.adCooldowns[adHash] = Date.now() + (cooldownSeconds * 1000);
-                    startCooldownUI(cooldownSeconds);
+                    // Step 6: Cooldown Dinâmico baseado na suspeição
+                    const finalCooldown = window.BotDetector.getDynamicCooldown(cooldownSeconds);
+                    window.BotDetector.reportState.adCooldowns[adHash] = Date.now() + (finalCooldown * 1000);
+                    startCooldownUI(finalCooldown);
                 }
-                    actionBtn.classList.add('as-voted-anim', 'active');
+
+                // === LOGICAL CONTRADICTIONS (Step 3 Beta 3) ===
+                if (!['votes_like', 'votes_dislike'].includes(signal)) {
+                    const CONFLICTS = {
+                        'votes_old_profile': ['votes_new_profile', 'votes_fake_profile'],
+                        'votes_trusted_seller': ['votes_new_profile', 'votes_fake_profile'],
+                        'votes_verified_seller': ['votes_new_profile', 'votes_fake_profile'],
+                        'votes_owner_real': ['votes_new_profile', 'votes_fake_profile', 'votes_not_owner'],
+                        'votes_not_owner': ['votes_owner_real'],
+                        'votes_no_response': ['votes_responsive', 'votes_clear_communication', 'votes_negotiation_ok', 'votes_clear_process'],
+                        'votes_evasive': ['votes_responsive', 'votes_clear_communication', 'votes_negotiation_ok', 'votes_clear_process'],
+                        'votes_off_platform': ['votes_responsive', 'votes_clear_communication', 'votes_clear_process'],
+                        'votes_only_whatsapp': ['votes_responsive', 'votes_clear_communication', 'votes_clear_process'],
+                        'votes_responsive': ['votes_no_response', 'votes_evasive', 'votes_off_platform', 'votes_only_whatsapp'],
+                        'votes_clear_communication': ['votes_no_response', 'votes_evasive', 'votes_off_platform', 'votes_only_whatsapp'],
+                        'votes_clear_process': ['votes_no_response', 'votes_evasive', 'votes_off_platform', 'votes_only_whatsapp'],
+                        'votes_ai_photos': ['votes_real_photos', 'votes_original_photos'],
+                        'votes_generic_images': ['votes_real_photos', 'votes_original_photos'],
+                        'votes_cloned_listing': ['votes_real_photos', 'votes_original_photos'],
+                        'votes_cloned_ad': ['votes_real_photos', 'votes_original_photos'],
+                        'votes_real_photos': ['votes_ai_photos', 'votes_generic_images', 'votes_cloned_listing', 'votes_cloned_ad', 'votes_fake_photo'],
+                        'votes_original_photos': ['votes_ai_photos', 'votes_generic_images', 'votes_cloned_listing', 'votes_cloned_ad', 'votes_fake_photo'],
+                        'votes_vague_location': ['votes_location_confirmed', 'votes_location_matches', 'votes_hand_delivery'],
+                        'votes_fake_item': ['votes_location_confirmed', 'votes_location_matches', 'votes_visit_done', 'votes_visit_available', 'votes_saw_car', 'votes_hand_delivery'],
+                        'votes_property_different': ['votes_location_matches', 'votes_visit_done', 'votes_saw_car'],
+                        'votes_location_confirmed': ['votes_vague_location', 'votes_fake_item'],
+                        'votes_location_matches': ['votes_vague_location', 'votes_property_different', 'votes_fake_item'],
+                        'votes_hand_delivery': ['votes_vague_location', 'votes_fake_item'],
+                        'votes_no_visit_allowed': ['votes_visit_available', 'votes_visit_done', 'votes_saw_car', 'votes_test_drive_ok', 'votes_test_drive_done'],
+                        'votes_no_test_drive': ['votes_test_drive_ok', 'votes_test_drive_done'],
+                        'votes_deposit_no_visit': ['votes_visit_available', 'votes_visit_done', 'votes_saw_car'],
+                        'votes_deposit_before_see': ['votes_saw_car', 'votes_test_drive_ok', 'votes_test_drive_done', 'votes_mechanical_check'],
+                        'votes_advance_payment': ['votes_visit_available', 'votes_visit_done', 'votes_saw_car', 'votes_hand_delivery'],
+                        'votes_visit_available': ['votes_no_visit_allowed', 'votes_deposit_no_visit', 'votes_advance_payment', 'votes_fake_item'],
+                        'votes_visit_done': ['votes_no_visit_allowed', 'votes_deposit_no_visit', 'votes_advance_payment', 'votes_fake_item', 'votes_property_different'],
+                        'votes_saw_car': ['votes_no_visit_allowed', 'votes_deposit_no_visit', 'votes_advance_payment', 'votes_deposit_before_see', 'votes_fake_item', 'votes_property_different'],
+                        'votes_test_drive_ok': ['votes_no_visit_allowed', 'votes_no_test_drive', 'votes_deposit_before_see'],
+                        'votes_test_drive_done': ['votes_no_visit_allowed', 'votes_no_test_drive', 'votes_deposit_before_see'],
+                        'votes_docs_incomplete': ['votes_docs_ok', 'votes_docs_shown', 'votes_docs_complete', 'votes_mechanical_check'],
+                        'votes_no_docs': ['votes_docs_ok', 'votes_docs_shown', 'votes_docs_complete'],
+                        'votes_docs_ok': ['votes_docs_incomplete', 'votes_no_docs'],
+                        'votes_docs_shown': ['votes_docs_incomplete', 'votes_no_docs'],
+                        'votes_docs_complete': ['votes_docs_incomplete', 'votes_no_docs'],
+                        'votes_mechanical_check': ['votes_docs_incomplete', 'votes_deposit_before_see'],
+                        'votes_pressure': ['votes_clear_process', 'votes_responsive'],
+                        'votes_pressure_sale': ['votes_clear_process', 'votes_responsive']
+                    };
+
+                    const conflictList = CONFLICTS[signal];
+                    if (conflictList) {
+                        try {
+                            const savedVotes = JSON.parse(localStorage.getItem(`as_user_votes_${adHash}`) || '{}');
+                            const activeConflict = (Array.isArray(conflictList) ? conflictList : [conflictList])
+                                .find(c => savedVotes[c]);
+
+                            if (activeConflict) {
+                                // Tentar encontrar o label do botão que está a causar o conflito
+                                const conflictBtn = tooltip.querySelector(`.as-action-btn[data-signal="${activeConflict}"]`);
+                                const conflictLabel = conflictBtn ? conflictBtn.querySelector('.as-btn-label').innerText : activeConflict;
+                                
+                                this.showFeedback(tooltip, `Voto contraditório! Já votou em '${conflictLabel}'. Remova-o primeiro.`, 'error');
+                                
+                                // PENALIZAÇÃO: Tentativa de contradição
+                                if (window.TrustManager) {
+                                    window.TrustManager.recordAction('contradiction');
+                                }
+                                return; // BLOQUEAR VOTO
+                            }
+                        } catch (e) {}
+                    }
+                }
+
+                // === CONTEXT SELECTOR (Step 5) ===
+                const contexts = JSON.parse(actionBtn.dataset.contexts || '[]');
+                
+                const finalizeVote = (context) => {
+                    actionBtn.classList.add('active', 'as-voted-anim');
                     
                     // Atualizar contagem visual
-                    const countSpanAdd = actionBtn.querySelector('.as-btn-count');
-                    if (countSpanAdd) {
-                         // NADA DE CHECKS - INCREMENTAR
-                         const currentTextAdd = countSpanAdd.innerText;
-                         const matchAdd = currentTextAdd.match(/(\d+)/);
-                         const oldVal = matchAdd ? parseInt(matchAdd[1]) : 0;
-                         countSpanAdd.innerText = `${oldVal + 1} (...)`;
-                         countSpanAdd.style.display = 'inline-block';
+                    const countSpan = actionBtn.querySelector('.as-btn-count');
+                    if (countSpan) {
+                         const currentText = countSpan.innerText;
+                         const match = currentText.match(/(\d+)/);
+                         const oldVal = match ? parseInt(match[1]) : 0;
+                         countSpan.innerText = `${oldVal + 1} (...)`;
+                         countSpan.style.display = 'inline-block';
                     }
 
                     // Atualizar contador global VISUAL (Exceto Likes/Dislikes)
-                    // NOTA: O incremento persistente (localStorage) é feito em BotDetector.registerReport
                     if (!['votes_like', 'votes_dislike'].includes(signal)) {
-                        const userLimitElAdd = tooltip.querySelector('.as-user-limit-info b');
-                        if (userLimitElAdd) {
-                            let currentLimit = parseInt(userLimitElAdd.innerText || '0');
-                            userLimitElAdd.innerText = currentLimit + 1;
+                        const userLimitEl = tooltip.querySelector('.as-user-limit-info b');
+                        if (userLimitEl) {
+                            let currentLimit = parseInt(userLimitEl.innerText || '0');
+                            userLimitEl.innerText = currentLimit + 1;
                         }
-                        // REMOVIDO: Incremento duplicado aqui causava contador 2x
-                        // O BotDetector.registerReport em content.js já faz: localStorage.setItem(`as_vote_count_${adHash}`, current + 1);
                     }
 
                     // Guardar no localStorage
@@ -711,21 +734,34 @@ window.UIModule = {
                             const savedVotes = JSON.parse(localStorage.getItem(`as_user_votes_${adHash}`) || '{}');
                             savedVotes[signal] = true;
                             localStorage.setItem(`as_user_votes_${adHash}`, JSON.stringify(savedVotes));
-                        } catch (e) {
-                            console.warn('[Anti-Scam] Erro ao guardar voto:', e);
-                        }
+                            
+                            // Regista no BotDetector
+                            if (window.BotDetector) {
+                                window.BotDetector.registerVoteChange(adHash, 1, signal);
+                            }
+                        } catch (e) {}
                     }
 
-                    // Chamar onReport com delta positivo
-                    options.onReport(signal, +1);
-                    this.showFeedback(tooltip, 'Voto registado!', 'success');
+                    // Notificar content script
+                    if (options.onReport) options.onReport(signal, 1, context);
+                    
+                    // RECOMPENSA: Uso legítimo
+                    if (window.TrustManager && !['votes_like', 'votes_dislike'].includes(signal)) {
+                        window.TrustManager.recordAction('consistency');
+                    }
+                    
+                    this.showFeedback(tooltip, context ? `Voto registado: ${context}` : "Voto registado com sucesso!", 'success');
+                };
+
+                if (contexts.length > 0 && !isCurrentlyVoted) {
+                    this.showContextSelector(tooltip, actionBtn, signal, contexts, (selectedContext) => {
+                        finalizeVote(selectedContext);
+                    });
+                } else {
+                    finalizeVote();
                 }
-                
-
-
-
-
-
+                return;
+            }
 
             // 4. Lógica de Likes/Dislikes (Delegation)
             const likeBtn = e.target.closest('.as-like-btn');
@@ -769,78 +805,6 @@ window.UIModule = {
         const commentInput = tooltip.querySelector('.as-comment-input');
         const commentSubmit = tooltip.querySelector('.as-comment-submit');
         const commentsList = tooltip.querySelector('.as-comments-list');
-
-        // Lógica de Tabs v2.0 ANTIGA REMOVIDA (Substituída por Delegação)
-        // tooltip.querySelectorAll('.as-tab-btn').forEach(btn => {
-        //     btn.onclick = () => {
-        //         // Remove active de tudo
-        //         tooltip.querySelectorAll('.as-tab-btn').forEach(b => b.classList.remove('active'));
-        //         tooltip.querySelectorAll('.as-tab-content').forEach(c => c.classList.remove('active'));
-                
-        //         // Ativa atual
-        //         btn.classList.add('active');
-        //         const tabId = `as-tab-${btn.dataset.tab}`;
-        //         const content = tooltip.querySelector(`#${tabId}`);
-        //         if (content) content.classList.add('active');
-        //     };
-        // });
-
-        // Lógica de Likes/Dislikes ANTIGA REMOVIDA (Substituída por Delegação)
-        // const likeBtn = tooltip.querySelector('.as-like-btn');
-        // const dislikeBtn = tooltip.querySelector('.as-dislike-btn');
-
-        // if (likeBtn && dislikeBtn) {
-        //     // Ler estado inicial do utilizador
-        //     const storageKey = `as_vote_${adHash}`;
-        //     const currentVote = localStorage.getItem(storageKey); // 'votes_like' | 'votes_dislike' | null
-
-        //     // Atualiza UI inicial
-        //     if (currentVote === 'votes_like') likeBtn.classList.add('as-btn-voted');
-        //     if (currentVote === 'votes_dislike') dislikeBtn.classList.add('as-btn-voted');
-
-        //     const handleVote = (type) => {
-        //         const previousVote = localStorage.getItem(storageKey);
-                
-        //         // Cenário 1: Remover voto (toggle)
-        //         if (previousVote === type) {
-        //             options.onReport(type, -1);
-        //             localStorage.removeItem(storageKey);
-                    
-        //             if (type === 'votes_like') likeBtn.classList.remove('as-btn-voted', 'as-voted-anim');
-        //             if (type === 'votes_dislike') dislikeBtn.classList.remove('as-btn-voted', 'as-voted-anim');
-                    
-        //             this.showFeedback(tooltip, 'Voto removido.', 'neutral');
-        //             return;
-        //         }
-
-        //         // Cenário 2: Mudar voto (Swap)
-        //         if (previousVote && previousVote !== type) {
-        //             // Remove anterior
-        //             options.onReport(previousVote, -1);
-        //             if (previousVote === 'votes_like') likeBtn.classList.remove('as-btn-voted');
-        //             if (previousVote === 'votes_dislike') dislikeBtn.classList.remove('as-btn-voted');
-        //         }
-
-        //         // Cenário 3: Novo voto (ou continuação do swap)
-        //         options.onReport(type, 1);
-        //         localStorage.setItem(storageKey, type);
-
-        //         // UI Updates
-        //         if (type === 'votes_like') {
-        //             likeBtn.classList.add('as-btn-voted', 'as-voted-anim');
-        //             dislikeBtn.classList.remove('as-btn-voted'); // Safety
-        //         }
-        //         if (type === 'votes_dislike') {
-        //             dislikeBtn.classList.add('as-btn-voted', 'as-voted-anim');
-        //             likeBtn.classList.remove('as-btn-voted'); // Safety
-        //         }
-                
-        //         this.showFeedback(tooltip, type === 'votes_like' ? 'Gostaste deste anúncio!' : 'Não gostaste deste anúncio.', 'success');
-        //     };
-
-        //     likeBtn.onclick = () => handleVote('votes_like');
-        //     dislikeBtn.onclick = () => handleVote('votes_dislike');
-        // }
 
         if (commentInput && commentSubmit) {
             const submitComment = async () => {
@@ -920,8 +884,53 @@ window.UIModule = {
         if (this.feedbackTimeout) clearTimeout(this.feedbackTimeout);
 
         this.feedbackTimeout = setTimeout(() => {
-            feedbackArea.innerHTML = '';
+            if (feedbackArea.querySelector('.as-feedback')) {
+                feedbackArea.innerHTML = '';
+            }
         }, 5000);
+    },
+
+    /**
+     * Mostra seletor de contexto para votos críticos.
+     */
+    showContextSelector(tooltip, btn, signal, contexts, onSelect) {
+        const feedbackArea = tooltip.querySelector('.as-feedback-area');
+        if (!feedbackArea) return;
+
+        const label = btn.querySelector('.as-btn-label').innerText;
+        
+        feedbackArea.innerHTML = `
+            <div class="as-context-selector" style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px; margin-bottom: 12px; animation: slide-down 0.2s ease;">
+                <div style="font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 8px; text-transform: uppercase;">
+                    Contexto obrigatório para: <b>${label}</b>
+                </div>
+                <div class="as-context-chips" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                    ${contexts.map(ctx => `
+                        <button class="as-context-chip" data-context="${ctx}" style="background: white; border: 1px solid #cbd5e1; padding: 6px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.2s;">
+                            ${ctx}
+                        </button>
+                    `).join('')}
+                    <button class="as-context-cancel" style="background: transparent; border: none; font-size: 11px; color: #94a3b8; cursor: pointer; padding: 6px; font-weight: 600;">Cancelar</button>
+                </div>
+            </div>
+        `;
+
+        feedbackArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        // Listeners para os chips
+        const selector = feedbackArea.querySelector('.as-context-selector');
+        selector.addEventListener('click', (e) => {
+            const chip = e.target.closest('.as-context-chip');
+            if (chip) {
+                const context = chip.dataset.context;
+                feedbackArea.innerHTML = ''; // Limpa seletor
+                onSelect(context);
+                return;
+            }
+            if (e.target.closest('.as-context-cancel')) {
+                feedbackArea.innerHTML = '';
+            }
+        });
     },
 
     /**
@@ -953,10 +962,11 @@ window.UIModule = {
             // Usa dados locais se disponíveis, senão tenta do objeto cs (para compatibilidade)
             const userVoted = localUserVotes[btn.signal] || (cs.user_votes && cs.user_votes[btn.signal]); 
             
-            // Percentagem
-            const percent = (totalVotes > 0) ? Math.round((count / totalVotes) * 100) : 0;
-            const badgeContent = count > 0 ? `${percent}%` : '';
-            const badgeStyle = count > 0 ? '' : 'display:none';
+            // Percentagem (Usar Round para evitar decimais e resíduos)
+            const roundedCount = Math.round(count);
+            const percent = (totalVotes > 0.5) ? Math.round((count / totalVotes) * 100) : 0;
+            const badgeContent = roundedCount > 0 ? `${percent}%` : '';
+            const badgeStyle = roundedCount > 0 ? '' : 'display:none';
 
             const activeClass = userVoted ? 'active' : '';
             const isHidden = index >= limit;
@@ -965,13 +975,14 @@ window.UIModule = {
 
             // Tooltip: Usa descrição detalhada se existir, senão usa label simples
             const tooltipTitle = btn.description 
-                ? `${btn.label}\n─────────────\n${btn.description}\n(${count} votos)`
-                : `${btn.label} (${count} votos) - Clique para reportar`;
+                ? `${btn.label}\n─────────────\n${btn.description}\n(${roundedCount} votos)`
+                : `${btn.label} (${roundedCount} votos) - Clique para reportar`;
 
             html += `
             <button class="as-action-btn ${btn.class} ${activeClass} ${hiddenClass}" 
                     data-signal="${btn.signal}" 
                     data-tab="${btn.tab}"
+                    data-contexts='${JSON.stringify(btn.contexts || [])}'
                     title="${tooltipTitle}"
                     style="${hiddenStyle}">
                 <span class="as-btn-icon">${btn.icon}</span>

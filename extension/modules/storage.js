@@ -63,10 +63,11 @@ const StorageModule = {
                 // Merge campos restantes
                 entry = { ...entry, ...data, last_seen: Date.now() };
 
-                // Recalcula scores (Eixo Duplo)
-                const scores = this.calculateScores(entry);
-                entry.risk_score = scores.risk;
-                entry.quality_score = scores.quality;
+                // Recalcula scores (Eixo Duplo + Confiança)
+            const scores = this.calculateScores(entry);
+            entry.risk_score = scores.risk;
+            entry.quality_score = scores.quality;
+            entry.confidence_score = scores.confidence;
 
                 // Salva
                 chrome.storage.local.set({ [hash]: entry }, () => {
@@ -144,7 +145,8 @@ const StorageModule = {
             // Dados Nativos do Site (Views, Saves)
             native_signals: {
                 views: 0,
-                saves: 0
+                saves: 0,
+                created_at: Date.now()
             },
             // Dados comportamentais agregados (Mistura de Risco e Qualidade)
             behavior_signals: {
@@ -191,36 +193,19 @@ const StorageModule = {
      */
     calculateScores(entry) {
         try {
-            // 1. Calcular Risco (Começa em 100 e desce)
-            let riskScore = this.CONFIG.INITIAL_RISK_SCORE;
-            
-            // Check de integridade
-            if (typeof this.calculateRiskPenalties !== 'function') {
-                console.error("Anti-Scam Critical: calculateRiskPenalties missing!");
-                return { risk: 50, quality: 0 }; // Fallback "Unknown"
-            }
+            const riskScore = Math.max(this.CONFIG.MIN_RISK_SCORE, Math.min(this.CONFIG.MAX_RISK_SCORE, this.CONFIG.INITIAL_RISK_SCORE - this.calculateRiskPenalties(entry)));
+            const qualityScore = riskScore >= this.CONFIG.RISK_THRESHOLD_FOR_QUALITY ? this.calculateQualityScore(entry) : 0;
+            const confidenceScore = this.calculateConfidenceScore(entry);
 
-            const riskPenalties = this.calculateRiskPenalties(entry);
-            riskScore -= riskPenalties;
-            
-            riskScore = Math.max(this.CONFIG.MIN_RISK_SCORE, Math.min(this.CONFIG.MAX_RISK_SCORE, riskScore));
-
-            // 2. Calcular Qualidade 
-            let qualityScore = 0;
-            
-            // Camouflage Rule
-            if (riskScore >= this.CONFIG.RISK_THRESHOLD_FOR_QUALITY) {
-                if (typeof this.calculateQualityScore === 'function') {
-                    qualityScore = this.calculateQualityScore(entry);
-                }
-            }
-
-            return { risk: riskScore, quality: qualityScore };
+            return { 
+                risk: riskScore, 
+                quality: qualityScore, 
+                confidence: confidenceScore 
+            };
 
         } catch (e) {
             console.error("Anti-Scam Scoring Error:", e);
-            // Fallback seguro: nem bom nem mau
-            return { risk: 50, quality: 0 };
+            return { risk: 50, quality: 0, confidence: 0 };
         }
     },
 
@@ -329,14 +314,47 @@ const StorageModule = {
             penalties += Math.min(15, dislikes * 3);
         }
 
-        // 4. Sinais Comportamentais (Mantém absoluto por enquanto)
-        if (behavior.total_visits > 5) {
-            const abandonRate = behavior.abandon_fast_count / behavior.total_visits;
-            if (abandonRate > 0.6) penalties += 15;
-            else if (abandonRate > 0.4) penalties += 5;
+        // NOTA: O Silêncio (Análise Passiva) e Comportamento foi movido 
+        // para o nível de Confiança, para evitar penalizar score falsamente.
+
+        // FLAG: Consistência Excessiva (Positive Shield Defense)
+        // Se temos muitos votos e 100% positivos, pode ser um ataque de validação.
+        const totalVotes = community.total_votes || 0;
+        const positiveVotes = (community.votes_legit || 0) + (community.votes_visit_available || 0);
+        if (totalVotes > 8 && positiveVotes === totalVotes) {
+            // Não penaliza o score, mas reduzirá a confiança na "perfeição"
+            // ou será usado no Qualitative State.
+            entry.as_excessive_consensus = true;
         }
 
         return penalties;
+    },
+
+    /**
+     * Calcula o nível de confiança/maturidade dos dados.
+     * Resolve o "Ponto Cego" do silêncio vs burla.
+     */
+    calculateConfidenceScore(entry) {
+        let confidence = 0;
+        const community = entry.community_signals || {};
+        const native = entry.native_signals || {};
+        const behavior = entry.behavior_signals || {};
+        const totalVotes = community.total_votes || 0;
+        const views = native.views || 0;
+
+        // 1. Volume de Votos (Base Sólida)
+        if (totalVotes > 10) confidence += 60;
+        else if (totalVotes > 3) confidence += 30;
+        else if (totalVotes > 0) confidence += 10;
+
+        // 2. Volume de Visualizações (Exposição)
+        if (views > 1000) confidence += 20;
+        else if (views > 300) confidence += 10;
+
+        // 3. Comportamento (Tempo de permanência médio alto dá confiança na análise)
+        if (behavior.avg_time_on_page > 40000) confidence += 20;
+
+        return Math.min(100, confidence);
     },
 
     /**
@@ -434,6 +452,29 @@ const StorageModule = {
             if (r.external_contact > 0) explanations.push({ kind: 'risk', text: 'Reportado: Contacto externo' });
         }
 
+        // 5. Silêncio Suspeito e Antiguidade
+        const community = entry.community_signals || {};
+        const totalVotes = community.total_votes || 0;
+        const native = entry.native_signals || {};
+        const positiveVotes = (community.votes_legit || 0) + (community.votes_visit_available || 0) + (community.votes_good_quality || 0);
+        const views = native.views || 0;
+        const createdAt = native.created_at || Date.now();
+        const ageInDays = (Date.now() - createdAt) / (1000 * 60 * 60 * 24);
+
+        if (views > 800 && positiveVotes < 2) {
+            explanations.push({ 
+                kind: 'caution', 
+                text: 'Exposição atípica: Muitas visualizações face à ausência de interação comunitária.' 
+            });
+        }
+        
+        if (ageInDays > 5 && totalVotes === 0) {
+            explanations.push({ 
+                kind: 'caution', 
+                text: 'Registo limitado: Anúncio com visibilidade sem feedback comunitário registado.' 
+            });
+        }
+
         // Explicações de Qualidade (Só se houver score de qualidade)
         if (entry.quality_score > 0) {
             const contactRate = totalVisits > 0 ? (behavior.contact_open_count / totalVisits) : 0;
@@ -448,8 +489,87 @@ const StorageModule = {
         return {
             risk_score: entry.risk_score,
             quality_score: entry.quality_score,
+            confidence_score: entry.confidence_score,
             explanations,
-            confidence: totalVisits > 5 ? 'high' : (totalVisits > 2 ? 'medium' : 'low')
+            confidence: entry.confidence_score > 70 ? 'high' : (entry.confidence_score > 30 ? 'medium' : 'low'),
+            state: this.getQualitativeState(entry)
+        };
+    },
+
+    /**
+     * Retorna o estado qualitativo do anúncio (Veredito Humano).
+     * Substitui o score absoluto por 4 estados de maturidade e risco.
+     * @param {Object} entry 
+     * @returns {Object} { label, color, description, class }
+     */
+    getQualitativeState(entry) {
+        const community = entry.community_signals || {};
+        const totalVotes = community.total_votes || 0;
+        const risk = entry.risk_score;
+        const confidence = entry.confidence_score || 0;
+        const native = entry.native_signals || {};
+        
+        // 1. Alertas Relevantes (Só se Risco for BAIXO)
+        // Prioridade máxima: Há registos diretos de irregularidades
+        const criticalSignals = [
+            'votes_advance_payment', 'votes_fake_item', 'votes_deposit_no_visit',
+            'votes_external_contact', 'votes_no_visit_allowed', 'votes_cloned_listing',
+            'votes_mbway_scam', 'votes_phishing'
+        ];
+        const hasCritical = criticalSignals.some(sig => community[sig] > 0);
+
+        if (risk < 60 || hasCritical) {
+            return {
+                label: 'Atenção Requerida',
+                color: '#f87171',
+                description: 'Foram reportadas divergências significativas pela comunidade.',
+                class: 'as-state-critical'
+            };
+        }
+
+        // 2. Não Validado / Poucos Dados (Volume insuficiente para qualquer conclusão)
+        if (confidence < 30) {
+            return {
+                label: 'Pendente de Validação',
+                color: '#94a3b8',
+                description: 'Ainda não existem registos comunitários suficientes para uma análise conclusiva.',
+                class: 'as-state-neutral'
+            };
+        }
+
+        // 3. Padrões Consistentes (Risco Alto/Bom + Confiança Média/Alta)
+        if (risk >= 85 && confidence >= 50) {
+            // Defesa contra Positive Shield: Se é perfeito demais, suspeitamos.
+            if (entry.as_excessive_consensus) {
+                return {
+                    label: 'Sob Observação',
+                    color: '#fbbf24',
+                    description: 'Padrão estatístico atípico: Consenso excessivo detetado. Recomenda-se cautela adicional.',
+                    class: 'as-state-warning'
+                };
+            }
+
+            return {
+                label: 'Padrão Consistente',
+                color: '#34d399',
+                description: 'Este anúncio apresenta um histórico de interações coerente com as normas da plataforma.',
+                class: 'as-state-safe'
+            };
+        }
+
+        // 4. Análise em Observação (Mistos ou Exposição sem Validação)
+        let description = 'Existem registos limitados ou divergências nos dados comunitários.';
+        const views = native.views || 0;
+        
+        if (views > 1000 && totalVotes < 3) {
+            description = 'Exposição elevada com baixo feedback: Recomenda-se precaução na análise dos detalhes.';
+        }
+
+        return {
+            label: 'Sob Observação',
+            color: '#fbbf24',
+            description: description,
+            class: 'as-state-warning'
         };
     }
 };

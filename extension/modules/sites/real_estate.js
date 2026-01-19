@@ -8,6 +8,7 @@ window.SiteConfigs.push(
             title: 'h1, span.main-info__title-main',
             price: 'span.info-data-price, span.txt-bold',
             description: '.comment, .adCommentsLanguage',
+            views: '#stats .stats-info b, .ad-views', // Idealista tem views no rodapé ou stats
             insertTarget: 'span.info-data-price, h1',
             insertPosition: 'afterend'
         },
@@ -26,6 +27,7 @@ window.SiteConfigs.push(
             title: 'a.item-link',
             price: '.item-price',
             description: '.item-description',
+            views: '.item-stats, [data-testid="ad-views"]', 
             insertTarget: '.item-price',
             insertPosition: 'afterend'
         },
@@ -48,6 +50,7 @@ window.SiteConfigs.push(
             title: 'h1, [data-cy="adPageAdTitle"]',
             price: '[data-cy="adPageAdPrice"], [data-cy="adPageHeaderPrice"], strong[aria-label="Preço"], .css-1wws9er, .css-u0t81v, .elm6lnc1, strong', 
             description: '[data-cy="adPageAdDescription"], section[id="description"]',
+            views: '[data-cy="adPageAdStats"], span[data-testid="ad-views"]',
             insertTarget: 'a[href="#map"], a[class*="e1aypsbg1"]',
             insertPosition: 'afterend' 
         },

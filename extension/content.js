@@ -28,6 +28,7 @@ const App = {
         default: [
             // ========== SINAIS DE RISCO - FINANCEIROS ==========
             { tab: 'risk', signal: 'votes_deposit_no_visit', label: 'Caução sem visita', icon: '💸', class: 'as-btn-risk',
+              contexts: ["Antes da visita", "Reserva p/ MBWay", "Sinal via IBAN"],
               description: 'Pede caução, sinal ou reserva ANTES de visitar o imóvel. Tática #1 de burla segundo PSP.' },
             { tab: 'risk', signal: 'votes_external_payment', label: 'Link pagamento externo', icon: '🔗', class: 'as-btn-risk',
               description: 'Enviou link para site de pagamento/reserva fora da plataforma. Pode ser phishing.' },
@@ -38,6 +39,7 @@ const App = {
             { tab: 'risk', signal: 'votes_not_owner', label: 'Não é o dono', icon: '🎭', class: 'as-btn-risk',
               description: 'Suspeita de sublocação fraudulenta. Aluga imóvel e "subarrenda" a vítimas.' },
             { tab: 'risk', signal: 'votes_no_visit_allowed', label: 'Recusa visita', icon: '🚫', class: 'as-btn-risk',
+              contexts: ["Diz que está fora", "Exige pagamento prévio", "Incontactável"],
               description: 'Não permite visita presencial antes de pagamento. NUNCA pague sem ver!' },
             { tab: 'risk', signal: 'votes_off_platform', label: 'Só por WhatsApp', icon: '📞', class: 'as-btn-warning',
               description: 'Insiste em falar fora da plataforma para evitar monitorização.' },
@@ -87,10 +89,11 @@ const App = {
         olx: [
              // ========== SINAIS DE RISCO (Baseado em padrões reais de burla PT) ==========
              // Financeiros
-             { tab: 'risk', signal: 'votes_mbway_scam', label: 'Pediu MBWay (suspeito)', icon: '💸', class: 'as-btn-risk',
-               description: 'O vendedor/comprador pediu para usar MBWay de forma estranha, como gerar uma referência ou associar um número.' },
-             { tab: 'risk', signal: 'votes_fake_proof', label: 'Comprovativo Falso', icon: '📧', class: 'as-btn-risk',
-               description: 'Recebeu um email ou screenshot de pagamento PayPal/transferência que parece falso ou suspeito.' },
+             { tab: 'risk', signal: 'votes_mbway_scam', label: 'Pagamento via MBWay', icon: '💸', class: 'as-btn-risk',
+               contexts: ["Pediu código SMS", "Pediu ida ao Multibanco", "Simulou pagamento"],
+               description: 'O vendedor/comprador solicitou o uso de MBWay de forma atípica, como gerar referências ou associar números externos.' },
+             { tab: 'risk', signal: 'votes_fake_proof', label: 'Comprovativo Atípico', icon: '📧', class: 'as-btn-risk',
+               description: 'Recebeu um registo de pagamento que requer confirmação de veracidade junto da entidade bancária.' },
              { tab: 'risk', signal: 'votes_sms_code', label: 'Pediu Código SMS', icon: '🔐', class: 'as-btn-risk',
                description: 'Pediram um código que recebeu por SMS. NUNCA partilhe códigos - podem roubar a sua conta WhatsApp ou banco.' },
              
@@ -105,8 +108,8 @@ const App = {
                description: 'Enviou um link para um site externo. Pode ser phishing ou página falsa de pagamento.' },
              { tab: 'risk', signal: 'votes_cloned_ad', label: 'Anúncio Clonado', icon: '📋', class: 'as-btn-risk',
                description: 'Este anúncio parece copiado de outro. Burlões clonam anúncios reais para enganar compradores.' },
-             { tab: 'risk', signal: 'votes_address_fishing', label: 'Pediu Morada (Suspeito)', icon: '📍', class: 'as-btn-warning',
-               description: 'Pediu a sua morada sem motivo claro. Pode ser recolha de dados para assalto ou fraude de identidade.' },
+             { tab: 'risk', signal: 'votes_address_fishing', label: 'Solicitação de Morada', icon: '📍', class: 'as-btn-warning',
+               description: 'O vendedor solicitou a morada completa ou dados sensíveis precocemente.' },
              { tab: 'risk', signal: 'votes_no_response', label: 'Sem Resposta', icon: '👁️', class: 'as-btn-neutral',
                description: 'O anunciante não respondeu às suas mensagens ou desapareceu após contacto inicial.' },
              
@@ -140,8 +143,8 @@ const App = {
                description: 'Exige depósito ou sinal ANTES de ver o carro. NUNCA pague sem inspecionar pessoalmente!' },
              { tab: 'risk', signal: 'votes_fake_payment_proof', label: 'Comprovativo falso', icon: '📧', class: 'as-btn-risk',
                description: 'Mostrou comprovativo de transferência/pagamento que parece falso. Espere confirmação do banco.' },
-             { tab: 'risk', signal: 'votes_abroad_car', label: 'Carro no estrangeiro', icon: '✈️', class: 'as-btn-risk',
-               description: 'Diz que o carro está no UK ou outro país e pede depósito para transporte. Burla clássica!' },
+             { tab: 'risk', signal: 'votes_abroad_car', label: 'Artigo no Estrangeiro', icon: '✈️', class: 'as-btn-risk',
+               description: 'O anunciante indica que o artigo se encontra fora do país exigindo pagamento antecipado. Padrão de risco identificado.' },
              
              // Legitimidade
              { tab: 'risk', signal: 'votes_cloned_ad', label: 'Anúncio clonado', icon: '📋', class: 'as-btn-risk',
@@ -211,6 +214,29 @@ const App = {
                description: 'Aceita encontro presencial em local público e seguro.' },
              { tab: 'positive', signal: 'votes_communication', label: 'Comunicação Boa', icon: '💬', class: 'as-btn-positive',
                description: 'Português correto, respostas claras, sem scripts.' }
+        ],
+        chinashops: [
+             // ========== TEMU & SHEIN (User-Centric) ==========
+             { tab: 'risk', signal: 'votes_bad_quality', label: 'Má Qualidade', icon: '🧵', class: 'as-btn-risk',
+               description: 'Tecido fino, transparente, costuras fracas. Nada a ver com a foto.' },
+             { tab: 'risk', signal: 'votes_wrong_size', label: 'Tamanho Errado', icon: '📏', class: 'as-btn-risk',
+               description: 'Tamanhos muito pequenos (ex: XL que serve a S) ou medidas erradas.' },
+             { tab: 'risk', signal: 'votes_fake_photo', label: 'Foto Falsa', icon: '📸', class: 'as-btn-risk',
+               description: 'A foto é de estúdio/marca famosa, o produto é uma cópia barata.' },
+             { tab: 'risk', signal: 'votes_fake_promo', label: 'Promo Falsa', icon: '💸', class: 'as-btn-warning',
+               description: 'Preço original inflacionado para fingir desconto de 90%. Gamificação abusiva.' },
+             { tab: 'risk', signal: 'votes_never_arrived', label: 'Nunca Chegou', icon: '📦', class: 'as-btn-risk',
+               description: 'Encomenda perdida, ficou na alfândega ou suporte não resolve.' },
+             { tab: 'risk', signal: 'votes_hard_return', label: 'Devolução Difícil', icon: '🔄', class: 'as-btn-neutral',
+               description: 'Custos de devolução superiores ao valor do artigo ou processo complexo.' },
+
+             // Positivos
+             { tab: 'positive', signal: 'votes_good_quality', label: 'Boa Qualidade', icon: '✨', class: 'as-btn-positive',
+               description: 'O material surpreendeu pela positiva, corresponde ao preço.' },
+             { tab: 'positive', signal: 'votes_true_size', label: 'Tamanho Real', icon: '✅', class: 'as-btn-positive',
+               description: 'Medidas correspondem à tabela de tamanhos.' },
+             { tab: 'positive', signal: 'votes_fast_shipping', label: 'Chegou Rápido', icon: '🚀', class: 'as-btn-positive',
+               description: 'Entrega antes do prazo previsto.' }
         ],
         chinashops: [
              // ========== TEMU & SHEIN (User-Centric) ==========
@@ -906,19 +932,25 @@ const App = {
 
         // Re-bind do onReport completo se necessário, ou usar lógica centralizada
         // Por simplicidade, vou copiar a lógica de update do processAd para garantir funcionalidade total
-        tooltipOptions.onReport = async (signalType, delta = 1) => {
+        tooltipOptions.onReport = async (signalType, delta = 1, context = null) => {
              if (!adData.community_signals) adData.community_signals = {};
              
              // Atualiza sinais
              adData.community_signals[signalType] = (adData.community_signals[signalType] || 0) + delta;
              if (adData.community_signals[signalType] < 0) adData.community_signals[signalType] = 0;
+
+             // Regista Contexto (Step 5)
+             if (context) {
+                 if (!adData.context_stats) adData.context_stats = {};
+                 if (!adData.context_stats[signalType]) adData.context_stats[signalType] = {};
+                 adData.context_stats[signalType][context] = (adData.context_stats[signalType][context] || 0) + delta;
+             }
+
              // Atualiza total (EXCETO likes/dislikes - estes não devem diluir percentagens)
              if (!['votes_like', 'votes_dislike'].includes(signalType)) {
                  adData.community_signals.total_votes = (adData.community_signals.total_votes || 0) + delta;
                  if (adData.community_signals.total_votes < 0) adData.community_signals.total_votes = 0;
              }
-
-             // O cálculo de score é automático via StorageModule (percentual)
 
              // Salva e Atualiza UI
              await StorageModule.updateAdData(uniqueId, adData);
@@ -1119,10 +1151,23 @@ const App = {
             const tooltipOptions = {
                 buttons: this.currentConfig.buttons || [],
                 voteQueue: Promise.resolve(),
-                onReport: async (signalType, delta = 1) => {
+                onReport: async (signalType, delta = 1, context = null) => {
                     // Lock/Queue para evitar race conditions em cliques rápidos
                     tooltipOptions.voteQueue = tooltipOptions.voteQueue.then(async () => {
-                        const weight = window.BotDetector ? window.BotDetector.getWeightMultiplier() : 1.0;
+                        // 1. Obter Peso (BotDetector + TrustManager)
+                        let weight = 1.0;
+                        if (window.BotDetector) {
+                            weight *= window.BotDetector.getWeightMultiplier(); // Comportamento
+                            weight *= window.BotDetector.getSignalBaseWeight(signalType); // Importância do Sinal
+                        }
+                        if (window.TrustManager) {
+                            weight *= window.TrustManager.getTrustWeight(); // Reputação Histórica
+                        }
+                        
+                        // 2. Regista Ação Positiva se for remoção
+                        if (delta < 0 && window.TrustManager) {
+                            window.TrustManager.recordAction('correction');
+                        }
                     
                     // CRÍTICO: Buscar dados FRESCOS do storage (não usar 'data' estático)
                     let freshData = await StorageModule.getAdData(hash);
@@ -1134,18 +1179,22 @@ const App = {
                     if (!freshData.community_signals) freshData.community_signals = {};
                     if (!freshData.community_signals[signalType]) freshData.community_signals[signalType] = 0;
                     
-                    freshData.community_signals[signalType] += delta; 
+                    freshData.community_signals[signalType] += (delta * weight); 
                     // Garante que não fica negativo
                     if (freshData.community_signals[signalType] < 0) freshData.community_signals[signalType] = 0;
 
-                    // Atualiza total (EXCETO likes/dislikes - estes não devem diluir percentagens)
-                    if (!['votes_like', 'votes_dislike'].includes(signalType)) {
-                        freshData.community_signals.total_votes = (freshData.community_signals.total_votes || 0) + delta;
-                        if (freshData.community_signals.total_votes < 0) freshData.community_signals.total_votes = 0;
+                    // Regista Contexto (Step 5)
+                    if (context) {
+                        if (!freshData.context_stats) freshData.context_stats = {};
+                        if (!freshData.context_stats[signalType]) freshData.context_stats[signalType] = {};
+                        freshData.context_stats[signalType][context] = (freshData.context_stats[signalType][context] || 0) + (delta * weight);
                     }
 
-                    // O cálculo de score é feito automaticamente pelo StorageModule.calculateScores()
-                    // que usa a lógica percentual democrática (total_votes) para TODOS os botões
+                    // Atualiza total (EXCETO likes/dislikes - estes não devem diluir percentagens)
+                    if (!['votes_like', 'votes_dislike'].includes(signalType)) {
+                        freshData.community_signals.total_votes = (freshData.community_signals.total_votes || 0) + (delta * weight);
+                        if (freshData.community_signals.total_votes < 0) freshData.community_signals.total_votes = 0;
+                    }
 
                     // Atualiza contagem de participantes únicos (Heurística: 1º voto registado do user)
                     const userVotes = window.BotDetector ? window.BotDetector.getUserVoteCount(hash) : 0;
@@ -1155,9 +1204,8 @@ const App = {
                     }
 
                     // ATUALIZAÇÃO: Regista interação no BotDetector para gerir contador e limites
-                    // CRÍTICO: Likes/Dislikes NÃO devem contar para o limite ou histórico de "reports"
                     if (window.BotDetector && !['votes_like', 'votes_dislike'].includes(signalType)) {
-                        window.BotDetector.registerVoteChange(hash, delta);
+                        window.BotDetector.registerVoteChange(hash, delta, signalType);
                     }
                     
                     const newData = await StorageModule.updateAdData(hash, freshData);
