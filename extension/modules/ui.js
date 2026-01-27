@@ -158,13 +158,13 @@ window.UIModule = {
             }
             const localUserVotes = cs.user_votes || {};
             
-            const totalVotes = (cs.votes_legit || 0) + (cs.votes_no_response || 0) + 
-                              (cs.votes_external_contact || 0) + (cs.votes_advance_payment || 0) + 
-                              (cs.votes_fake_item || 0);
+            const totalVotes = cs.total_votes_raw || cs.total_votes || 0;
             
             const getPercent = (votes) => {
-                if (totalVotes === 0) return 0;
-                return Math.round((votes / totalVotes) * 100);
+                const weightedTotal = cs.total_votes_weighted || cs.total_votes || 0;
+                if (weightedTotal === 0) return 0;
+                // Os votos individuais (cs.votes_*) são agora WEIGHTED se vierem do novo sistema
+                return Math.round((votes / weightedTotal) * 100);
             };
     
             const pLegit = getPercent(cs.votes_legit || 0);
@@ -243,9 +243,9 @@ window.UIModule = {
                         </div>
                     </div>
                     <div class="as-total-votes-label">
-                        <span title="Pessoas que participaram">👥 ${Math.round(cs.users_count || (cs.total_votes > 0 ? 1 : 0))}</span>
+                        <span title="Pessoas que participaram">👥 ${Math.round(cs.users_count || (totalVotes > 0 ? totalVotes : 0))}</span>
                         <span style="opacity:0.5; margin:0 4px;">|</span>
-                        <span title="Total de reações">💬 ${Math.round(cs.total_votes || 0)}</span>
+                        <span title="Total de interações">💬 ${Math.round(totalVotes)}</span>
                     </div>
                     <div class="as-user-limit-info">Interações registadas: <b>${userVotes}</b></div>
                     <div class="as-cooldown-timer" style="display:none">Próximo voto em: <span class="as-timer-val">30</span>s</div>
@@ -959,14 +959,12 @@ window.UIModule = {
         
         buttons.forEach((btn, index) => {
             const count = cs[btn.signal] || 0;
+            const rawCount = cs[`${btn.signal}_raw`] || Math.round(count);
             // Usa dados locais se disponíveis, senão tenta do objeto cs (para compatibilidade)
             const userVoted = localUserVotes[btn.signal] || (cs.user_votes && cs.user_votes[btn.signal]); 
             
-            // Percentagem (Usar Round para evitar decimais e resíduos)
-            const roundedCount = Math.round(count);
-            const percent = (totalVotes > 0.5) ? Math.round((count / totalVotes) * 100) : 0;
-            const badgeContent = roundedCount > 0 ? `${percent}%` : '';
-            const badgeStyle = roundedCount > 0 ? '' : 'display:none';
+            const badgeContent = rawCount > 0 ? `${rawCount}` : '';
+            const badgeStyle = rawCount > 0 ? '' : 'display:none';
 
             const activeClass = userVoted ? 'active' : '';
             const isHidden = index >= limit;
@@ -975,8 +973,8 @@ window.UIModule = {
 
             // Tooltip: Usa descrição detalhada se existir, senão usa label simples
             const tooltipTitle = btn.description 
-                ? `${btn.label}\n─────────────\n${btn.description}\n(${roundedCount} votos)`
-                : `${btn.label} (${roundedCount} votos) - Clique para reportar`;
+                ? `${btn.label}\n─────────────\n${btn.description}\n(${rawCount} votos)`
+                : `${btn.label} (${rawCount} votos) - Clique para reportar`;
 
             html += `
             <button class="as-action-btn ${btn.class} ${activeClass} ${hiddenClass}" 
@@ -991,8 +989,8 @@ window.UIModule = {
             </button>`;
         });
 
-        if (buttons.length > 6) { // Mostra toggle se houver mais que o limite base (6)
-             const label = isTabExpanded ? `Ver menos opções ↑` : `Ver mais opções (${buttons.length - 6}) ↓`;
+        if (list.length > 6) { // Mostra toggle se houver mais que o limite base (6)
+             const label = isTabExpanded ? `Ver menos opções ↑` : `Ver mais opções (${list.length - 6}) ↓`;
              html += `<button class="as-view-more-link" data-tab="${tabId}" style="grid-column: 1 / -1; margin-top:8px; background:#f9fafb; border:1px solid #d1d5db; border-radius:4px; color:#374151; font-weight:700; font-size:11px; cursor:pointer; padding:8px; width:100%; transition:all 0.2s; text-align:center;">
                 ${label}
              </button>`;

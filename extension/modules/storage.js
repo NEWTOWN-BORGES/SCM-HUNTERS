@@ -137,7 +137,9 @@ const StorageModule = {
                 votes_advance_payment: 0,
                 votes_fake_item: 0,
                 votes_legit: 0,       // "Respondeu" / "Parece OK"
-                total_votes: 0,
+                total_votes: 0,       // Mantido para compatibilidade, será o WEIGHTED
+                total_votes_raw: 0,   // Inteiro (Pessoas reais)
+                total_votes_weighted: 0, // Soma dos pesos
                 last_sync: 0
             },
             // Comentários da comunidade
@@ -231,7 +233,7 @@ const StorageModule = {
         if (user.external_contact > 0) penalties += 30;
 
         // 3. Sinais da Comunidade (PERCENTAGE BASED)
-        const total = community.total_votes || 0;
+        const total = community.total_votes_weighted || community.total_votes || 0;
 
         if (total > 0) {
             // Helper para calcular impacto
@@ -339,7 +341,7 @@ const StorageModule = {
         const community = entry.community_signals || {};
         const native = entry.native_signals || {};
         const behavior = entry.behavior_signals || {};
-        const totalVotes = community.total_votes || 0;
+        const totalVotes = community.total_votes_raw || community.total_votes || 0;
         const views = native.views || 0;
 
         // 1. Volume de Votos (Base Sólida)

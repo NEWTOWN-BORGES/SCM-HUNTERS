@@ -24,14 +24,10 @@
         "modules/trust_manager.js", 
         "modules/behavior_tracker.js", 
         "modules/ad_analyzer.js", 
-        "modules/sites/general.js",
-        "modules/sites/shopping.js",
-        "modules/sites/automotive.js",
-        "modules/sites/real_estate.js",
         "content.js"
       ],
       "css": ["styles/content.css"],
-      "run_at": "document_idle"
+      "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [

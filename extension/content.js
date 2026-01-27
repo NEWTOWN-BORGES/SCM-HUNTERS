@@ -401,6 +401,7 @@ const App = {
                 title: 'h1, span.main-info__title-main',
                 price: 'span.info-data-price, span.txt-bold',
                 description: '.comment, .adCommentsLanguage',
+                views: '#stats .stats-info b, .ad-views',
                 insertTarget: 'span.info-data-price, h1',
                 insertPosition: 'afterend'
             },
@@ -419,6 +420,7 @@ const App = {
                 title: 'a.item-link',
                 price: '.item-price',
                 description: '.item-description',
+                views: '.item-stats, [data-testid="ad-views"]',
                 insertTarget: '.item-price',
                 insertPosition: 'afterend'
             },
@@ -441,6 +443,7 @@ const App = {
                 title: 'h1, [data-cy="adPageAdTitle"]',
                 price: '[data-cy="adPageAdPrice"], [data-cy="adPageHeaderPrice"], strong[aria-label="Preço"], .css-1wws9er, .css-u0t81v, .elm6lnc1, strong', 
                 description: '[data-cy="adPageAdDescription"], section[id="description"]',
+                views: '[data-cy="adPageAdStats"], span[data-testid="ad-views"]',
                 insertTarget: 'a[href="#map"], a[class*="e1aypsbg1"]',
                 insertPosition: 'afterend' 
             },
@@ -484,6 +487,7 @@ const App = {
                 title: 'h1, h2[class*="title"]', 
                 price: '[data-testid="ad-price-container"] h3, .offer-price__number, h3[class*="price"], div[class*="Price"]', 
                 description: '[data-testid="ad-description"], .offer-description__description, section[class*="description"]',
+                views: 'span[data-testid="ad-views"], .offer-meta__item:contains("Visualizações")',
                 insertTarget: '[data-testid="ad-price-container"], .offer-price__number, h1',
                 insertPosition: 'afterend'
             },
@@ -501,6 +505,7 @@ const App = {
                 container: 'article, div[data-testid="listing-ad"], div[class*="offer-item"], div[data-testid="main-page-promoted-ad"], div[class*="promoted-ad"], li[data-testid*="ad-"], div.oa-item, div[class*="ooa-"][data-testid="search-results"] > div, article[class*="ooa-"], a[href*="/anuncio/"]:not([class*="reference"]), div[class*="grid-item"]', 
                 title: 'h1, h2, h3, h4, a[class*="title"], span[class*="title"], a', 
                 price: '[data-testid="ad-price"], [data-testid="ad-card-price"], section[aria-label="Price"], span[class*="price"], div[class*="Price"], span.oa-price, span[data-testid="price"], div[class*="offer-price"], p[class*="ooa-"][class*="15sm3kk"], p[class*="ooa-"][class*="price"], p:last-child, div[class*="price"]', 
+                views: '[data-testid="ad-views"]',
                 insertTarget: '[data-testid="ad-price"], [data-testid="ad-card-price"], section[aria-label="Price"], span[class*="price"], div[class*="Price"], span.oa-price, span[data-testid="price"], div[class*="offer-price"], p[class*="ooa-"][class*="15sm3kk"], p[class*="ooa-"][class*="price"], p:last-child, div[class*="price"]',
                 insertPosition: 'afterend'
             },
@@ -520,6 +525,7 @@ const App = {
                 title: '[data-cy="ad_title"], [data-testid="ad_title"], h1', 
                 price: '[data-testid="ad-price-container"] h3, [data-testid="ad-price-container"], [data-testid="ad-price"], h3', 
                 description: 'div[data-cy="ad_description"], [data-testid="ad-description"]',
+                views: 'span[data-testid="ad-views"], .css-17it79k', // OLX view stats
                 insertTarget: '[data-testid="ad-price-container"], [data-testid="ad-price"], h1',
                 insertPosition: 'afterend'
             },
@@ -538,7 +544,7 @@ const App = {
                 // Títulos globais + Parceiros (Standvirtual, Imovirtual)
                 title: 'h6, h2, h4, a[href*="/d/"], a[href*="/ads/"], a[href*="standvirtual"], a[href*="imovirtual"]', 
                 price: '[data-testid="ad-price"], .price, [class*="price"]',
-                insertTarget: '[data-testid="priceBlock"]', 
+                insertTarget: '[data-testid="ad-price"], .price, [class*="price"]', 
                 insertPosition: 'afterend'
             },
             getId: (node) => {
@@ -584,35 +590,33 @@ const App = {
                  this.currentConfig = this.siteConfigs.find(c => c.name === 'imovirtual-detail');
              }
         }
-
         if (this.currentConfig) {
             console.log(`[Anti-Scam] Site detectado e ATIVO: ${this.currentConfig.name}`);
             
             // Resolve buttons config
             this.currentConfig.buttons = this.buttonTemplates[this.currentConfig.buttonsKey || 'default'];
 
+            // Inicia observação do DOM IMEDIATAMENTE (mesmo sem body ainda)
+            this.observeDOM();
+
             // Inicia módulos
             if (window.BotDetector) window.BotDetector.init();
             
-            // Scanner inicial imediato
-            console.log('[Anti-Scam] Iniciando Scanner Global...');
-            this.runScanner();
+            // Scanner inicial imediato (se o body já existir)
+            if (document.body) {
+                console.log('[Anti-Scam] Iniciando Scanner Global...');
+                this.runScanner();
+            }
             
             // Páginas de detalhe precisam de mais tentativas (conteúdo dinâmico)
             if (this.currentConfig.isDetailPage) {
                 setTimeout(() => this.runScanner(), 100);
                 setTimeout(() => this.runScanner(), 300);
                 setTimeout(() => this.runScanner(), 600);
-                setTimeout(() => this.runScanner(), 1000);
-                setTimeout(() => this.runScanner(), 2000);
             } else {
                 // Listagem: menos tentativas
                 setTimeout(() => this.runScanner(), 100);
-                setTimeout(() => this.runScanner(), 300);
             }
-            
-            // Inicia observação do DOM
-            this.observeDOM();
 
             // Se estamos numa página de detalhe, inicia tracking comportamental
             if (this.currentConfig.isDetailPage) {
@@ -620,11 +624,9 @@ const App = {
             }
 
             // NOVO: Scanning periódico para lojas chinesas (SPA agressivas)
-            // Estas plataformas carregam conteúdo muito dinamicamente
             const chinashopsNames = ['temu', 'temu-detail', 'shein', 'shein-detail', 'aliexpress', 'aliexpress-detail'];
             if (chinashopsNames.includes(this.currentConfig.name)) {
                 console.log('[Anti-Scam] Ativando Interval Scanner para SPA:', this.currentConfig.name);
-                // Escanear a cada 2 segundos para apanhar conteúdo novo
                 setInterval(() => {
                     this.runScanner();
                 }, 2000);
@@ -696,7 +698,7 @@ const App = {
             }
         });
 
-        observer.observe(document.body, {
+        observer.observe(document.documentElement || document, {
             childList: true,
             subtree: true
         });
@@ -936,8 +938,16 @@ const App = {
              if (!adData.community_signals) adData.community_signals = {};
              
              // Atualiza sinais
-             adData.community_signals[signalType] = (adData.community_signals[signalType] || 0) + delta;
-             if (adData.community_signals[signalType] < 0) adData.community_signals[signalType] = 0;
+             adData.community_signals[signalType] = (adData.community_signals[signalType] || 0) + (delta * 1); // Weighted (Legado, será float se houver peso)
+             
+             // Novos campos explícitos
+             const rawField = `${signalType}_raw`;
+             const weightedField = `${signalType}_weighted`;
+             adData.community_signals[rawField] = (adData.community_signals[rawField] || 0) + delta;
+             adData.community_signals[weightedField] = (adData.community_signals[weightedField] || 0) + (delta * 1); // Em heurística peso é 1
+             
+             if (adData.community_signals[rawField] < 0) adData.community_signals[rawField] = 0;
+             if (adData.community_signals[weightedField] < 0) adData.community_signals[weightedField] = 0;
 
              // Regista Contexto (Step 5)
              if (context) {
@@ -948,8 +958,14 @@ const App = {
 
              // Atualiza total (EXCETO likes/dislikes - estes não devem diluir percentagens)
              if (!['votes_like', 'votes_dislike'].includes(signalType)) {
-                 adData.community_signals.total_votes = (adData.community_signals.total_votes || 0) + delta;
-                 if (adData.community_signals.total_votes < 0) adData.community_signals.total_votes = 0;
+                 adData.community_signals.total_votes_raw = (adData.community_signals.total_votes_raw || 0) + delta;
+                 adData.community_signals.total_votes_weighted = (adData.community_signals.total_votes_weighted || 0) + (delta * 1);
+                 
+                 // Fallback total_votes (Legado)
+                 adData.community_signals.total_votes = adData.community_signals.total_votes_weighted;
+
+                 if (adData.community_signals.total_votes_raw < 0) adData.community_signals.total_votes_raw = 0;
+                 if (adData.community_signals.total_votes_weighted < 0) adData.community_signals.total_votes_weighted = 0;
              }
 
              // Salva e Atualiza UI
@@ -1176,12 +1192,25 @@ const App = {
                     }
                     
                     // Atualiza sinais da comunidade (nos dados frescos)
-                    if (!freshData.community_signals) freshData.community_signals = {};
-                    if (!freshData.community_signals[signalType]) freshData.community_signals[signalType] = 0;
+                    if (!freshData.community_signals) freshData.community_signals = {
+                        total_votes_raw: 0,
+                        total_votes_weighted: 0,
+                        total_votes: 0
+                    };
                     
-                    freshData.community_signals[signalType] += (delta * weight); 
-                    // Garante que não fica negativo
-                    if (freshData.community_signals[signalType] < 0) freshData.community_signals[signalType] = 0;
+                    const rawField = `${signalType}_raw`;
+                    const weightedField = `${signalType}_weighted`;
+                    
+                    // Incremento RAW (Sempre 1 ou -1)
+                    freshData.community_signals[rawField] = (freshData.community_signals[rawField] || 0) + delta;
+                    if (freshData.community_signals[rawField] < 0) freshData.community_signals[rawField] = 0;
+                    
+                    // Incremento WEIGHTED (delta * weight)
+                    freshData.community_signals[weightedField] = (freshData.community_signals[weightedField] || 0) + (delta * weight);
+                    if (freshData.community_signals[weightedField] < 0) freshData.community_signals[weightedField] = 0;
+                    
+                    // Compatibilidade Legada (Misto)
+                    freshData.community_signals[signalType] = freshData.community_signals[weightedField];
 
                     // Regista Contexto (Step 5)
                     if (context) {
@@ -1190,10 +1219,15 @@ const App = {
                         freshData.context_stats[signalType][context] = (freshData.context_stats[signalType][context] || 0) + (delta * weight);
                     }
 
-                    // Atualiza total (EXCETO likes/dislikes - estes não devem diluir percentagens)
+                    // Atualiza totais (EXCETO likes/dislikes)
                     if (!['votes_like', 'votes_dislike'].includes(signalType)) {
-                        freshData.community_signals.total_votes = (freshData.community_signals.total_votes || 0) + (delta * weight);
-                        if (freshData.community_signals.total_votes < 0) freshData.community_signals.total_votes = 0;
+                        freshData.community_signals.total_votes_raw = (freshData.community_signals.total_votes_raw || 0) + delta;
+                        freshData.community_signals.total_votes_weighted = (freshData.community_signals.total_votes_weighted || 0) + (delta * weight);
+                        
+                        freshData.community_signals.total_votes = freshData.community_signals.total_votes_weighted;
+
+                        if (freshData.community_signals.total_votes_raw < 0) freshData.community_signals.total_votes_raw = 0;
+                        if (freshData.community_signals.total_votes_weighted < 0) freshData.community_signals.total_votes_weighted = 0;
                     }
 
                     // Atualiza contagem de participantes únicos (Heurística: 1º voto registado do user)
@@ -1302,6 +1336,9 @@ setInterval(() => {
     }
 }, 1000);
 
+// Inicialização IMEDIATA (para document_start)
+App.init();
+
 // Escuta por mensagens do Popup (Reset)
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'RESET_DATA') {
@@ -1318,17 +1355,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             window.BotDetector.metrics = { lastClickTime: 0, clickCount: 0, scrollEvents: 0, mouseDistance: 0, lastMousePos: {x:0, y:0}, sessionStart: Date.now() };
         }
 
-        alert('Anti-Scam: Memória limpa com sucesso.\\nA página será recarregada.');
+        alert('Anti-Scam: Memória limpa com sucesso.\nO página será recarregada.');
         window.location.reload();
     }
 });
 
-// Inicialização
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => App.init());
-} else {
-    App.init();
-}
-
-    // Expose for debugging
-    window.AntiScamApp = App;
+// Expose for debugging
+window.AntiScamApp = App;
