@@ -7,7 +7,9 @@
 window.UIModule = {
     activeTooltip: null,
     isClickLocked: false,
-    
+    outsideClickHandler: null,
+    hoverTimeout: null,
+    feedbackTimeout: null,
     // Estado de Persistência UI
     expandedTabs: {}, 
     activeTab: 'risk',
@@ -67,10 +69,8 @@ window.UIModule = {
         container.title = `Estado: ${state.label} | ${state.description}`;
         
         // Interaction Logic: Hover (temporário) vs Click (fixo)
-        let hoverTimeout;
-
-        const showIt = (fromClick = false) => {
-            if (hoverTimeout) clearTimeout(hoverTimeout);
+        const showIt = (fromClick = false, event = null) => {
+            this.cancelHideTimer();
             
             if (fromClick) {
                 // Se já está fixo pelo clique, fecha e desfixa
@@ -83,39 +83,51 @@ window.UIModule = {
                 this.isClickLocked = true;
             }
             
-            onClick(); // Chama showTooltip
+            onClick(event); // Chama showTooltip com o evento
         };
 
-        const hideIt = () => {
-            // Só fecha se não estiver fixo por clique
-            if (this.isClickLocked) return;
-            
-            hoverTimeout = setTimeout(() => {
-                this.closeTooltip();
-            }, 300); // 300ms delay para permitir mover para o tooltip
-        };
+        const hideIt = () => this.startHideTimer();
 
         container.addEventListener('click', (e) => {
             e.stopPropagation();
             e.preventDefault();
-            showIt(true); // true = veio de clique
+            showIt(true, e); // true = veio de clique
         });
 
-        container.addEventListener('mouseenter', () => showIt(false)); // false = veio de hover
-        container.addEventListener('mouseleave', hideIt);
+        container.addEventListener('mouseenter', (e) => showIt(false, e)); // false = veio de hover
+        container.addEventListener('mouseleave', () => hideIt());
 
         return container;
     },
-
-    closeTimer: null,
 
     /**
      * Remove tooltip ativo.
      */
     closeTooltip() {
+        this.cancelHideTimer();
         if (this.activeTooltip) {
             this.activeTooltip.remove();
             this.activeTooltip = null;
+        }
+        if (this.outsideClickHandler) {
+            document.removeEventListener('click', this.outsideClickHandler);
+            this.outsideClickHandler = null;
+        }
+        this.isClickLocked = false;
+    },
+
+    startHideTimer() {
+        if (this.isClickLocked) return;
+        this.cancelHideTimer();
+        this.hoverTimeout = setTimeout(() => {
+            this.closeTooltip();
+        }, 500); // 500ms para dar tempo de mover o mouse
+    },
+
+    cancelHideTimer() {
+        if (this.hoverTimeout) {
+            clearTimeout(this.hoverTimeout);
+            this.hoverTimeout = null;
         }
     },
 
@@ -306,6 +318,10 @@ window.UIModule = {
                 // Re-renders (innerHTML updates) will still work because we use event delegation (.closest)
                 this.attachEvents(tooltip, options, adHash);
 
+                // Persistência de Hover
+                tooltip.addEventListener('mouseenter', () => this.cancelHideTimer());
+                tooltip.addEventListener('mouseleave', () => this.startHideTimer());
+
                 // Posicionamento Robusto
                 const rect = targetElement.getBoundingClientRect();
                 const tooltipRect = tooltip.getBoundingClientRect();
@@ -333,16 +349,18 @@ window.UIModule = {
                 tooltip.style.left = `${left}px`;
                 tooltip.style.top = `${top}px`;
 
-                // Fechar ao clicar fora
-                const outsideClickHandler = (e) => {
-                    if (this.activeTooltip && !this.activeTooltip.contains(e.target) && !targetElement.contains(e.target)) {
+                // Fechar ao clicar fora (Gestão global para evitar vazamento)
+                this.outsideClickHandler = (e) => {
+                    if (this.activeTooltip && !this.activeTooltip.contains(e.target) && 
+                        !this.activeTooltip._target.contains(e.target)) {
                         this.closeTooltip();
-                        document.removeEventListener('click', outsideClickHandler);
                     }
                 };
                 
                 setTimeout(() => {
-                    document.addEventListener('click', outsideClickHandler);
+                    if (this.outsideClickHandler) {
+                        document.addEventListener('click', this.outsideClickHandler);
+                    }
                 }, 100);
             }
             
@@ -989,8 +1007,8 @@ window.UIModule = {
             </button>`;
         });
 
-        if (list.length > 6) { // Mostra toggle se houver mais que o limite base (6)
-             const label = isTabExpanded ? `Ver menos opções ↑` : `Ver mais opções (${list.length - 6}) ↓`;
+        if (buttons.length > 6) { // Mostra toggle se houver mais que o limite base (6)
+             const label = isTabExpanded ? `Ver menos opções ↑` : `Ver mais opções (${buttons.length - 6}) ↓`;
              html += `<button class="as-view-more-link" data-tab="${tabId}" style="grid-column: 1 / -1; margin-top:8px; background:#f9fafb; border:1px solid #d1d5db; border-radius:4px; color:#374151; font-weight:700; font-size:11px; cursor:pointer; padding:8px; width:100%; transition:all 0.2s; text-align:center;">
                 ${label}
              </button>`;
