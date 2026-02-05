@@ -243,21 +243,21 @@ window.UIModule = {
                         <div class="as-likes-container">
                             <button class="as-like-btn ${localUserVotes['votes_like'] ? 'as-btn-voted active' : ''}" title="Gosto disto">
                                 <svg viewBox="0 0 24 24" class="as-icon-like"><path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-1.91l-.01-.01L23 10z"/></svg>
-                                <span class="as-like-count">${cs.votes_like || 0}</span>
+                                <span class="as-like-count">${Math.round(cs.votes_like || 0)}</span>
                             </button>
                             <div class="as-like-bar-container">
                                  <div class="as-like-bar" style="width: ${getLikeRatio(cs)}%"></div>
                             </div>
                             <button class="as-dislike-btn ${localUserVotes['votes_dislike'] ? 'as-btn-voted active' : ''}" title="Não gosto disto">
                                 <svg viewBox="0 0 24 24" class="as-icon-dislike"><path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v1.91.01.01L1 14c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2zm4 0v12h4V3h-4z"/></svg>
-                                <span class="as-dislike-count">${cs.votes_dislike || 0}</span>
+                                <span class="as-dislike-count">${Math.round(cs.votes_dislike || 0)}</span>
                             </button>
                         </div>
                     </div>
                     <div class="as-total-votes-label">
-                        <span title="Pessoas que participaram">👥 ${Math.round(cs.users_count || (totalVotes > 0 ? totalVotes : 0))}</span>
+                        <span title="Pessoas que participaram">👥 ${Math.round(cs.users_count || cs.total_votes_raw || 0)}</span>
                         <span style="opacity:0.5; margin:0 4px;">|</span>
-                        <span title="Total de interações">💬 ${Math.round(totalVotes)}</span>
+                        <span title="Total de interações">💬 ${Math.round(cs.total_votes_raw || 0)}</span>
                     </div>
                     <div class="as-user-limit-info">Interações registadas: <b>${userVotes}</b></div>
                     <div class="as-cooldown-timer" style="display:none">Próximo voto em: <span class="as-timer-val">30</span>s</div>
@@ -976,8 +976,8 @@ window.UIModule = {
         }
         
         buttons.forEach((btn, index) => {
-            const count = cs[btn.signal] || 0;
-            const rawCount = cs[`${btn.signal}_raw`] || Math.round(count);
+            const count = cs[`${btn.signal}_raw`] || Math.round(cs[btn.signal] || 0);
+            const rawCount = count;
             // Usa dados locais se disponíveis, senão tenta do objeto cs (para compatibilidade)
             const userVoted = localUserVotes[btn.signal] || (cs.user_votes && cs.user_votes[btn.signal]); 
             

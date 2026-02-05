@@ -521,12 +521,12 @@ const App = {
             // Suporte Global: Aceita olx.pt, olx.br, olx.pl, olx.ro, etc.
             check: () => window.location.hostname.includes('olx.') && window.location.pathname.includes('/d/'),
             selectors: {
-                container: '#root, #__next, div[class*="main"], main, body', 
-                title: '[data-cy="ad_title"], [data-testid="ad_title"], h1', 
-                price: '[data-testid="ad-price-container"] h3, [data-testid="ad-price-container"], [data-testid="ad-price"], h3', 
-                description: 'div[data-cy="ad_description"], [data-testid="ad-description"]',
-                views: 'span[data-testid="ad-views"], .css-17it79k', // OLX view stats
-                insertTarget: '[data-testid="ad-price-container"], [data-testid="ad-price"], h1',
+                container: '#root, #__next, div[class*="main"], main, [class*="AdPage"], body', 
+                title: '[data-cy="ad_title"], [data-testid="ad_title"], [class*="title"], h1', 
+                price: '[data-testid="ad-price-container"] h3, [data-testid="ad-price-container"], [data-testid="ad-price"], [class*="price-container"] h3, [class*="PriceContainer"] h3, h3', 
+                description: 'div[data-cy="ad_description"], [data-testid="ad-description"], [class*="description"]',
+                views: 'span[data-testid="ad-views"], .css-17it79k, [class*="views"]', 
+                insertTarget: '[data-testid="ad-price-container"], [data-testid="ad-price"], [class*="price-container"], [class*="PriceContainer"], h1',
                 insertPosition: 'afterend'
             },
             getId: (node) => window.location.href.split('?')[0], 
@@ -540,9 +540,9 @@ const App = {
             check: () => window.location.hostname.includes('olx.') && !window.location.pathname.includes('/d/anuncio/'),
             selectors: {
                 // Cards de listagem do OLX (React Global)
-                container: '[data-cy="l-card"], [data-testid="l-card"], [data-testid="listing-ad"], li[data-testid="listing-ad"]', 
+                container: '[data-cy="l-card"], [data-testid="l-card"], [data-testid="listing-ad"], li[data-testid="listing-ad"], div[class*="ad-card"]', 
                 // Títulos globais + Parceiros (Standvirtual, Imovirtual)
-                title: 'h6, h2, h4, a[href*="/d/"], a[href*="/ads/"], a[href*="standvirtual"], a[href*="imovirtual"]', 
+                title: 'h6, h2, h4, a[href*="/d/"], a[href*="/ads/"], a[href*="standvirtual"], a[href*="imovirtual"], [class*="title"]', 
                 price: '[data-testid="ad-price"], .price, [class*="price"]',
                 insertTarget: '[data-testid="ad-price"], .price, [class*="price"]', 
                 insertPosition: 'afterend'
@@ -1210,7 +1210,12 @@ const App = {
                     if (freshData.community_signals[weightedField] < 0) freshData.community_signals[weightedField] = 0;
                     
                     // Compatibilidade Legada (Misto)
-                    freshData.community_signals[signalType] = freshData.community_signals[weightedField];
+                    // Para Likes/Dislikes, usamos SEMPRE o valor bruto (1 voto = 1 utilizador)
+                    if (['votes_like', 'votes_dislike'].includes(signalType)) {
+                        freshData.community_signals[signalType] = freshData.community_signals[rawField];
+                    } else {
+                        freshData.community_signals[signalType] = freshData.community_signals[weightedField];
+                    }
 
                     // Regista Contexto (Step 5)
                     if (context) {
