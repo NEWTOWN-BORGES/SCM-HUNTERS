@@ -40,7 +40,7 @@ const StorageModule = {
         return new Promise((resolve) => {
             chrome.storage.local.get([hash], (result) => {
                 let entry = result[hash] || this.createDefaultEntry();
-                
+
                 // Merge profundo para dados aninhados
                 if (data.behavior_signals) {
                     entry.behavior_signals = { ...entry.behavior_signals, ...data.behavior_signals };
@@ -59,19 +59,25 @@ const StorageModule = {
                     entry.community_signals = { ...entry.community_signals, ...data.community_signals };
                     delete data.community_signals;
                 }
-                
+
                 // Merge campos restantes
                 entry = { ...entry, ...data, last_seen: Date.now() };
 
                 // Recalcula scores (Eixo Duplo + Confiança)
-            const scores = this.calculateScores(entry);
-            entry.risk_score = scores.risk;
-            entry.quality_score = scores.quality;
-            entry.confidence_score = scores.confidence;
+                const scores = this.calculateScores(entry);
+                entry.risk_score = scores.risk;
+                entry.quality_score = scores.quality;
+                entry.confidence_score = scores.confidence;
+
+                // REPAIR DATA: Forçar Inteiros em Likes/Dislikes (se existirem decimais)
+                if (entry.community_signals) {
+                    if (entry.community_signals.votes_like) entry.community_signals.votes_like = Math.round(entry.community_signals.votes_like);
+                    if (entry.community_signals.votes_dislike) entry.community_signals.votes_dislike = Math.round(entry.community_signals.votes_dislike);
+                }
 
                 // Salva
                 chrome.storage.local.set({ [hash]: entry }, () => {
-                   resolve(entry);
+                    resolve(entry);
                 });
             });
         });
@@ -87,15 +93,15 @@ const StorageModule = {
         if (!entry) return null;
 
         const behavior = entry.behavior_signals;
-        
+
         // Incrementar contadores agregados
         behavior.total_visits++;
-        
+
         if (metrics.isFastAbandon) behavior.abandon_fast_count++;
         if (metrics.hasOpenedContact) behavior.contact_open_count++;
         if (metrics.hasCopiedContact) behavior.copy_contact_count++;
         if (metrics.hasCompletedScroll) behavior.scroll_complete_count++;
-        
+
         // Média móvel do tempo na página
         const prevTotal = behavior.avg_time_on_page * (behavior.total_visits - 1);
         behavior.avg_time_on_page = Math.round((prevTotal + metrics.timeOnPage) / behavior.total_visits);
@@ -122,7 +128,7 @@ const StorageModule = {
             last_seen: Date.now(),
             risk_score: this.CONFIG.INITIAL_RISK_SCORE,
             quality_score: this.CONFIG.INITIAL_QUALITY_SCORE,
-            
+
             // Reports explícitos dos utilizadores (Sinais de Risco)
             user_signals: {
                 no_response: 0,        // Não responde a mensagens
@@ -199,10 +205,10 @@ const StorageModule = {
             const qualityScore = riskScore >= this.CONFIG.RISK_THRESHOLD_FOR_QUALITY ? this.calculateQualityScore(entry) : 0;
             const confidenceScore = this.calculateConfidenceScore(entry);
 
-            return { 
-                risk: riskScore, 
-                quality: qualityScore, 
-                confidence: confidenceScore 
+            return {
+                risk: riskScore,
+                quality: qualityScore,
+                confidence: confidenceScore
             };
 
         } catch (e) {
@@ -253,13 +259,13 @@ const StorageModule = {
             penalties += calcImpact(community.votes_deposit_no_visit, 100);
             penalties += calcImpact(community.votes_bad_quality, 100);
             penalties += calcImpact(community.votes_off_platform, 100);
-            
+
             // Novos Sinais Críticos (Real Estate/General)
             penalties += calcImpact(community.votes_not_owner, 100);
             penalties += calcImpact(community.votes_no_visit_allowed, 100); // Recusa visita
             penalties += calcImpact(community.votes_cloned_listing, 100);
             penalties += calcImpact(community.votes_property_different, 100);
-            
+
             // Novos Sinais Críticos (OLX/Facebook/Auto)
             penalties += calcImpact(community.votes_mbway_scam, 100);
             penalties += calcImpact(community.votes_fake_proof, 100);
@@ -289,14 +295,14 @@ const StorageModule = {
             penalties += calcImpact(community.votes_generic_images, 40);
             penalties += calcImpact(community.votes_new_profile, 40);
             penalties += calcImpact(community.votes_inconsistent, 40);
-            
+
             // Novos Sinais Amarelos
             penalties += calcImpact(community.votes_too_cheap, 40);
             penalties += calcImpact(community.votes_ai_photos, 40);
             penalties += calcImpact(community.votes_targets_foreigners, 40);
             penalties += calcImpact(community.votes_bad_portuguese, 40);
             penalties += calcImpact(community.votes_address_fishing, 40);
-            penalties += calcImpact(community.votes_only_whatsapp, 40); 
+            penalties += calcImpact(community.votes_only_whatsapp, 40);
             penalties += calcImpact(community.votes_km_suspect, 40);
             penalties += calcImpact(community.votes_no_test_drive, 40);
             penalties += calcImpact(community.votes_docs_incomplete, 40);
@@ -308,7 +314,7 @@ const StorageModule = {
             penalties += calcImpact(community.votes_poor_description, 20);
             penalties += calcImpact(community.votes_sold_item, 20);
         }
-        
+
         // Penalidade por Dislikes (Separado do Rácio Democrático)
         const dislikes = community.votes_dislike || 0;
         if (dislikes > 0) {
@@ -390,7 +396,7 @@ const StorageModule = {
             quality += calcImpact(community.votes_hand_delivery, 80);
             quality += calcImpact(community.votes_product_ok, 80);
             quality += calcImpact(community.votes_mail_ok, 80);
-            
+
             // Documentos e Localização Forte - Impacto 60%
             quality += calcImpact(community.votes_docs_shown, 60);
             quality += calcImpact(community.votes_docs_ok, 60);
@@ -406,7 +412,7 @@ const StorageModule = {
             quality += calcImpact(community.votes_trusted_seller, 40);
             quality += calcImpact(community.votes_trusted_stand, 40);
             quality += calcImpact(community.votes_history_clear, 40);
-            
+
             quality += calcImpact(community.votes_original_photos, 30);
             quality += calcImpact(community.votes_real_photos, 30);
             quality += calcImpact(community.votes_legit, 30);
@@ -447,7 +453,7 @@ const StorageModule = {
         if (abandonRate > 0.5) {
             explanations.push({ type: 'warning', text: 'Alta taxa de rejeição' });
         }
-        
+
         if (entry.user_signals) {
             const r = entry.user_signals;
             if (r.advance_payment > 0) explanations.push({ kind: 'risk', text: 'Reportado: Pagamento adiantado' });
@@ -464,16 +470,16 @@ const StorageModule = {
         const ageInDays = (Date.now() - createdAt) / (1000 * 60 * 60 * 24);
 
         if (views > 800 && positiveVotes < 2) {
-            explanations.push({ 
-                kind: 'caution', 
-                text: 'Exposição atípica: Muitas visualizações face à ausência de interação comunitária.' 
+            explanations.push({
+                kind: 'caution',
+                text: 'Exposição atípica: Muitas visualizações face à ausência de interação comunitária.'
             });
         }
-        
+
         if (ageInDays > 5 && totalVotes === 0) {
-            explanations.push({ 
-                kind: 'caution', 
-                text: 'Registo limitado: Anúncio com visibilidade sem feedback comunitário registado.' 
+            explanations.push({
+                kind: 'caution',
+                text: 'Registo limitado: Anúncio com visibilidade sem feedback comunitário registado.'
             });
         }
 
@@ -510,7 +516,7 @@ const StorageModule = {
         const risk = entry.risk_score;
         const confidence = entry.confidence_score || 0;
         const native = entry.native_signals || {};
-        
+
         // 1. Alertas Relevantes (Só se Risco for BAIXO)
         // Prioridade máxima: Há registos diretos de irregularidades
         const criticalSignals = [
@@ -562,7 +568,7 @@ const StorageModule = {
         // 4. Análise em Observação (Mistos ou Exposição sem Validação)
         let description = 'Existem registos limitados ou divergências nos dados comunitários.';
         const views = native.views || 0;
-        
+
         if (views > 1000 && totalVotes < 3) {
             description = 'Exposição elevada com baixo feedback: Recomenda-se precaução na análise dos detalhes.';
         }
@@ -578,4 +584,4 @@ const StorageModule = {
 
 // Export para uso global
 window.StorageModule = StorageModule;
- 
+

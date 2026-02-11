@@ -11,10 +11,15 @@ window.UIModule = {
     hoverTimeout: null,
     feedbackTimeout: null,
     // Estado de Persistência UI
-    expandedTabs: {}, 
+    expandedTabs: {},
     activeTab: 'risk',
     currentData: null,
     currentHash: null,
+
+    init() {
+        // [Anti-Scam] Inicialização Limpa
+        // Sem verificações de integridade (User Request)
+    },
 
     /**
      * Cria o badge de status.
@@ -31,11 +36,11 @@ window.UIModule = {
     createBadge(data, onClick) {
         const container = document.createElement('div');
         container.className = 'as-badge-container';
-        
+
         // 1. Badge de Risco (Sempre visível) - Escudo
         const riskBadge = document.createElement('div');
         riskBadge.className = 'as-badge as-badge-risk';
-        
+
         let iconContent = '';
         // Lógica de Ícones:
         // >= 80: Safe (Verde) -> Mantém escudo simples, sem check (pedido do user)
@@ -50,9 +55,9 @@ window.UIModule = {
             iconContent = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>`;
         } else {
             riskBadge.classList.add('as-badge-danger');
-            iconContent = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>`; 
+            iconContent = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>`;
         }
-        
+
         riskBadge.innerHTML = iconContent;
         container.appendChild(riskBadge);
 
@@ -67,11 +72,11 @@ window.UIModule = {
 
         const state = window.StorageModule ? window.StorageModule.getQualitativeState(data) : { label: 'Em análise' };
         container.title = `Estado: ${state.label} | ${state.description}`;
-        
+
         // Interaction Logic: Hover (temporário) vs Click (fixo)
         const showIt = (fromClick = false, event = null) => {
             this.cancelHideTimer();
-            
+
             if (fromClick) {
                 // Se já está fixo pelo clique, fecha e desfixa
                 if (this.isClickLocked && this.activeTooltip && this.activeTooltip._target === container) {
@@ -82,7 +87,7 @@ window.UIModule = {
                 // Fixa o tooltip
                 this.isClickLocked = true;
             }
-            
+
             onClick(event); // Chama showTooltip com o evento
         };
 
@@ -116,6 +121,53 @@ window.UIModule = {
         this.isClickLocked = false;
     },
 
+    /**
+     * Inicializa/Restaura a UI de Cooldown se necessário.
+     */
+    initCooldownUI(tooltip, adHash) {
+        if (!window.BotDetector || !adHash) return;
+
+        const cooldownRem = window.BotDetector.getCooldownRemaining(adHash);
+        if (cooldownRem <= 0) return;
+
+        const timerDisplay = tooltip.querySelector('.as-cooldown-timer');
+        const timerVal = tooltip.querySelector('.as-timer-val');
+        if (!timerDisplay || !timerVal) return;
+
+        // FORÇA ESTILOS VISUAIS INLINE
+        timerDisplay.style.cssText = 'display: block !important; text-align: center; font-size: 15px; color: #ef4444; background: #fee2e2; padding: 10px; border-radius: 8px; font-weight: 800; margin-top: 10px; border: 2px solid #ef4444; width: 100%; box-sizing: border-box; animation: pulse-red 1s infinite;';
+        timerVal.style.fontWeight = '900';
+        timerVal.style.fontSize = '18px';
+
+        let remaining = cooldownRem;
+        timerVal.textContent = remaining;
+
+        // Disable actionable buttons
+        const disableBtns = () => tooltip.querySelectorAll('.as-action-btn, .as-btn, .as-like-btn, .as-dislike-btn').forEach(b => b.disabled = true);
+        disableBtns();
+
+        // Limpa intervalo anterior se existir (para evitar múltiplos timers)
+        if (tooltip._cooldownInterval) clearInterval(tooltip._cooldownInterval);
+
+        const interval = setInterval(() => {
+            remaining--;
+            if (remaining <= 0) {
+                clearInterval(interval);
+                tooltip._cooldownInterval = null;
+                timerDisplay.style.display = 'none';
+
+                // Re-enable
+                tooltip.querySelectorAll('.as-action-btn, .as-btn, .as-like-btn, .as-dislike-btn').forEach(b => {
+                    if (!b.classList.contains('as-btn-voted') && !b.classList.contains('as-voted-anim')) b.disabled = false;
+                });
+            } else {
+                timerVal.textContent = remaining;
+            }
+        }, 1000);
+
+        tooltip._cooldownInterval = interval;
+    },
+
     startHideTimer() {
         if (this.isClickLocked) return;
         this.cancelHideTimer();
@@ -146,7 +198,7 @@ window.UIModule = {
             const maxVotes = window.BotDetector ? window.BotDetector.CONFIG.MAX_VOTES_PER_AD : 5;
             const explanation = window.StorageModule.getScoreExplanation(data);
             const riskColor = data.risk_score >= 80 ? '#10b981' : (data.risk_score >= 40 ? '#f59e0b' : '#ef4444');
-    
+
             // Helpers locais
             const getLikeRatio = (signals) => {
                 const likes = signals.votes_like || 0;
@@ -158,7 +210,7 @@ window.UIModule = {
             };
 
             const cs = data.community_signals || {};
-            
+
             // Carregar votos do utilizador do localStorage para persistência
             if (adHash) {
                 try {
@@ -169,22 +221,22 @@ window.UIModule = {
                 }
             }
             const localUserVotes = cs.user_votes || {};
-            
+
             const totalVotes = cs.total_votes_raw || cs.total_votes || 0;
-            
+
             const getPercent = (votes) => {
                 const weightedTotal = cs.total_votes_weighted || cs.total_votes || 0;
                 if (weightedTotal === 0) return 0;
                 // Os votos individuais (cs.votes_*) são agora WEIGHTED se vierem do novo sistema
                 return Math.round((votes / weightedTotal) * 100);
             };
-    
+
             const pLegit = getPercent(cs.votes_legit || 0);
             const pNoResponse = getPercent(cs.votes_no_response || 0);
             const pExternal = getPercent(cs.votes_external_contact || 0);
             const pAdvance = getPercent(cs.votes_advance_payment || 0);
             const pFake = getPercent(cs.votes_fake_item || 0);
-    
+
             // Filtrar botões por tab
             const allButtons = options.buttons || [];
             const riskButtons = allButtons.filter(b => b.tab === 'risk');
@@ -305,6 +357,9 @@ window.UIModule = {
                 tooltip = this.activeTooltip;
                 tooltip.innerHTML = html;
                 tooltip.style.height = 'auto'; // Força recálculo da altura
+
+                // Inicializa Cooldown (update - re-render)
+                this.initCooldownUI(tooltip, adHash);
             } else {
                 tooltip = document.createElement('div');
                 tooltip.className = 'as-tooltip';
@@ -318,6 +373,9 @@ window.UIModule = {
                 // Re-renders (innerHTML updates) will still work because we use event delegation (.closest)
                 this.attachEvents(tooltip, options, adHash);
 
+                // Inicializa Cooldown (criação)
+                this.initCooldownUI(tooltip, adHash);
+
                 // Persistência de Hover
                 tooltip.addEventListener('mouseenter', () => this.cancelHideTimer());
                 tooltip.addEventListener('mouseleave', () => this.startHideTimer());
@@ -328,7 +386,7 @@ window.UIModule = {
                 const tooltipHeight = tooltipRect.height;
                 const tooltipWidth = 420; // 420px Confirmado
                 const margin = 10;
-                
+
                 // Horizontal
                 let left = rect.left + window.scrollX + 25;
                 if ((left + tooltipWidth) > (window.innerWidth + window.scrollX)) {
@@ -337,13 +395,13 @@ window.UIModule = {
                 if (left < margin) left = margin;
 
                 // Vertical (Flip se necessário)
-                let top = rect.bottom + window.scrollY + 10; 
+                let top = rect.bottom + window.scrollY + 10;
                 // Se não houver espaço em baixo (< altura tooltip) E houver em cima
                 if ((window.innerHeight - rect.bottom) < tooltipHeight && rect.top > tooltipHeight) {
-                     top = rect.top + window.scrollY - tooltipHeight - 10;
-                     tooltip.style.transformOrigin = 'bottom left';
+                    top = rect.top + window.scrollY - tooltipHeight - 10;
+                    tooltip.style.transformOrigin = 'bottom left';
                 } else {
-                     tooltip.style.transformOrigin = 'top left';
+                    tooltip.style.transformOrigin = 'top left';
                 }
 
                 tooltip.style.left = `${left}px`;
@@ -351,19 +409,19 @@ window.UIModule = {
 
                 // Fechar ao clicar fora (Gestão global para evitar vazamento)
                 this.outsideClickHandler = (e) => {
-                    if (this.activeTooltip && !this.activeTooltip.contains(e.target) && 
+                    if (this.activeTooltip && !this.activeTooltip.contains(e.target) &&
                         !this.activeTooltip._target.contains(e.target)) {
                         this.closeTooltip();
                     }
                 };
-                
+
                 setTimeout(() => {
                     if (this.outsideClickHandler) {
                         document.addEventListener('click', this.outsideClickHandler);
                     }
                 }, 100);
             }
-            
+
             // Events already attached below? No, I need to call attachEvents.
             // But wait, the original code had `this.attachEvents(tooltip, ...)` at the end.
             // I am replacing all of that. So I must ensure I don't duplicate or delete it.
@@ -371,12 +429,12 @@ window.UIModule = {
             // Line 261 onwards is `this.attachEvents...`.
             // So my replacement should NOT include `attachEvents`.
             // My replacement block ends with the `if/else` block closing brace.
-            
+
             // Wait, my replacement logic includes `if (isUpdate) ... else ...`.
             // The original code had `if (isUpdate)` block (lines 159-160) and `else` block (161-201).
             // AND THEN `let html = ...` (204-257).
             // AND THEN `tooltip.innerHTML = html` (259).
-            
+
             // My replacement combines ALL of that.
             // So I need to replace from 159 to 259.
             // AND ensure `this.attachEvents` follows.
@@ -387,30 +445,30 @@ window.UIModule = {
             // I'll close the `isUpdate/else` block and that's it.
 
 
-        // this.activeTooltip = tooltip; // Já definido acima? Não, definimos activeTooltip no final?
-        // Ah, checked `ui.js` previously. `this.activeTooltip = tooltip;` was there.
-        // this.activeTooltip = tooltip;
-        
-        // Events MOVED to creation block to avoid duplicates!
-        // this.attachEvents(tooltip, options, adHash);
-        
-        // Fechar APENAS ao clicar fora (ou no escudo/trigger se tratado externamente)
-        const outsideClickHandler = (e) => {
-            // Verifica se clicou no tooltip ou no target (escudo)
-            if (this.activeTooltip && !this.activeTooltip.contains(e.target) && !targetElement.contains(e.target)) {
-                this.closeTooltip();
-                document.removeEventListener('click', outsideClickHandler);
-            }
-        };
-        
-        // Adiciona listener com pequeno delay para evitar fechar logo ao abrir
-        setTimeout(() => {
-            document.addEventListener('click', outsideClickHandler);
-        }, 100);
+            // this.activeTooltip = tooltip; // Já definido acima? Não, definimos activeTooltip no final?
+            // Ah, checked `ui.js` previously. `this.activeTooltip = tooltip;` was there.
+            // this.activeTooltip = tooltip;
 
-    } catch (e) {
-        console.error('[Anti-Scam] Erro fatal no tooltip:', e);
-    }
+            // Events MOVED to creation block to avoid duplicates!
+            // this.attachEvents(tooltip, options, adHash);
+
+            // Fechar APENAS ao clicar fora (ou no escudo/trigger se tratado externamente)
+            const outsideClickHandler = (e) => {
+                // Verifica se clicou no tooltip ou no target (escudo)
+                if (this.activeTooltip && !this.activeTooltip.contains(e.target) && !targetElement.contains(e.target)) {
+                    this.closeTooltip();
+                    document.removeEventListener('click', outsideClickHandler);
+                }
+            };
+
+            // Adiciona listener com pequeno delay para evitar fechar logo ao abrir
+            setTimeout(() => {
+                document.addEventListener('click', outsideClickHandler);
+            }, 100);
+
+        } catch (e) {
+            console.error('[Anti-Scam] Erro fatal no tooltip:', e);
+        }
     },
 
     renderExplanations(list, context = 'neutral') {
@@ -419,11 +477,11 @@ window.UIModule = {
                 return '<div class="as-note as-note-safe" style="color: #10b981; background: #ecfdf5; border: 1px solid #a7f3d0;">✅ Nenhum padrão atípico identificado automaticamente.</div>';
             }
             if (context === 'positive') {
-                 return '<div class="as-note" style="color: #6b7280; font-style: italic;">ℹ️ Informação limitada disponível neste momento.</div>';
+                return '<div class="as-note" style="color: #6b7280; font-style: italic;">ℹ️ Informação limitada disponível neste momento.</div>';
             }
             return '<div class="as-note">Dados insuficientes para análise.</div>';
         }
-        
+
         return list.map(exp => `
             <div class="as-explanation as-explanation-${exp.type || 'neutral'}">
                 <span class="as-explanation-text">${exp.text}</span>
@@ -440,10 +498,10 @@ window.UIModule = {
         if (!comments || comments.length === 0) {
             return '<div class="as-no-comments">Sê o primeiro a comentar!</div>';
         }
-        
+
         // Mostra apenas os últimos 5 comentários
         const recentComments = comments.slice(-5).reverse();
-        
+
         return recentComments.map(comment => {
             const timeAgo = this.getTimeAgo(comment.timestamp);
             return `
@@ -460,7 +518,7 @@ window.UIModule = {
      */
     getTimeAgo(timestamp) {
         const seconds = Math.floor((Date.now() - timestamp) / 1000);
-        
+
         if (seconds < 60) return 'agora mesmo';
         if (seconds < 3600) return `há ${Math.floor(seconds / 60)} min`;
         if (seconds < 86400) return `há ${Math.floor(seconds / 3600)}h`;
@@ -478,46 +536,12 @@ window.UIModule = {
     },
 
     attachEvents(tooltip, options, adHash) {
-        // Helper para Timer
-        const startCooldownUI = (seconds) => {
-            const timerDisplay = tooltip.querySelector('.as-cooldown-timer');
-            const timerVal = tooltip.querySelector('.as-timer-val');
-            if (!timerDisplay || !timerVal) return;
-
-            // FORÇA ESTILOS VISUAIS INLINE
-            timerDisplay.style.cssText = 'display: block !important; text-align: center; font-size: 15px; color: #ef4444; background: #fee2e2; padding: 10px; border-radius: 8px; font-weight: 800; margin-top: 10px; border: 2px solid #ef4444; width: 100%; box-sizing: border-box; animation: pulse-red 1s infinite;';
-            timerVal.style.fontWeight = '900';
-            timerVal.style.fontSize = '18px';
-            let remaining = seconds;
-            timerVal.textContent = remaining;
-            
-            // Disable actionable buttons (not tabs, not View More)
-            const disableBtns = () => tooltip.querySelectorAll('.as-action-btn, .as-btn, .as-like-btn, .as-dislike-btn').forEach(b => b.disabled = true);
-            disableBtns();
-
-            const interval = setInterval(() => {
-                remaining--;
-                if (remaining <= 0) {
-                    clearInterval(interval);
-                    timerDisplay.style.display = 'none';
-                    // Re-enable (except voted ones logic handling elsewhere, but simple re-enable is safe-ish)
-                    tooltip.querySelectorAll('.as-action-btn, .as-btn, .as-like-btn, .as-dislike-btn').forEach(b => {
-                        if (!b.classList.contains('as-btn-voted') && !b.classList.contains('as-voted-anim')) b.disabled = false;
-                    });
-                } else {
-                    timerVal.textContent = remaining;
-                }
-            }, 1000);
-            
-            // Store interval to clear on close? UIModule doesn't track intervals per tooltip instance well yet.
-            // But tooltip close destroys DOM, interval keeps running. Ideally clear it.
-            // For now, simple.
-        };
+        // startCooldownUI removido daqui e promovido a initCooldownUI (método da classe)
 
         // Check initial cooldown
         if (window.BotDetector && adHash) {
-             const initial = window.BotDetector.getCooldownRemaining(adHash);
-             if (initial > 0) startCooldownUI(initial);
+            const initial = window.BotDetector.getCooldownRemaining(adHash);
+            if (initial > 0) this.initCooldownUI(tooltip, adHash);
         }
 
         // Unified Click Handler (Delegation)
@@ -529,7 +553,7 @@ window.UIModule = {
                 // Remove active de todos
                 tooltip.querySelectorAll('.as-tab-btn').forEach(b => b.classList.remove('active'));
                 tooltip.querySelectorAll('.as-tab-content').forEach(c => c.classList.remove('active'));
-                
+
                 // Ativa atual
                 tabBtn.classList.add('active');
                 const tabIdVal = tabBtn.dataset.tab || tabBtn.dataset.target;
@@ -546,21 +570,21 @@ window.UIModule = {
             if (viewMoreBtn) {
                 e.preventDefault();
                 e.stopPropagation();
-                
+
                 // Obtém o ID da aba a partir do atributo data-tab
                 const tabId = viewMoreBtn.dataset.tab;
-                
+
                 // Inverte o estado de expansão para esta aba específica
                 this.expandedTabs[tabId] = !this.expandedTabs[tabId];
-                
+
                 // Re-renderizar tooltip completo para aplicar novo estado
                 if (this.currentData) {
                     this.showTooltip(this.currentData, null, options, this.currentHash, true);
                 }
-                
+
                 return;
             }
-            
+
             // 2. Botões de Ação (Vote/Report/Like)
             let actionBtn = e.target.closest('.as-action-btn');
 
@@ -574,7 +598,7 @@ window.UIModule = {
                 // PRIORIDADE 1: REMOVER VOTO (Sempre permitido, sem cooldown)
                 if (isCurrentlyVoted) {
                     actionBtn.classList.remove('active', 'as-voted-anim', 'as-btn-voted');
-                    
+
                     if (!['votes_like', 'votes_dislike'].includes(signal)) {
                         const countSpan = actionBtn.querySelector('.as-btn-count');
                         if (countSpan) {
@@ -594,12 +618,12 @@ window.UIModule = {
                             const saved = JSON.parse(localStorage.getItem(`as_user_votes_${adHash}`) || '{}');
                             delete saved[signal];
                             localStorage.setItem(`as_user_votes_${adHash}`, JSON.stringify(saved));
-                            
+
                             // Regista remoção no BotDetector (Auditoria de Toggling)
                             if (window.BotDetector) {
                                 window.BotDetector.registerVoteChange(adHash, -1, signal);
                             }
-                        } catch (e) {}
+                        } catch (e) { }
                     }
                     this.showFeedback(tooltip, 'Voto removido.', 'neutral');
                     return;
@@ -629,7 +653,7 @@ window.UIModule = {
                     const cooldownRem = window.BotDetector.getCooldownRemaining(adHash);
                     if (cooldownRem > 0) {
                         this.showFeedback(tooltip, `Integridade ativa. Aguarde ${cooldownRem}s.`, 'warning');
-                        startCooldownUI(cooldownRem);
+                        this.initCooldownUI(tooltip, adHash);
                         return;
                     }
                 }
@@ -639,15 +663,14 @@ window.UIModule = {
                     const check = window.BotDetector.canReport(adHash, signal);
                     if (!check.allowed) {
                         this.showFeedback(tooltip, check.reason, 'error');
-                        return; 
+                        return;
                     }
                 }
 
                 if (window.BotDetector && cooldownSeconds > 0 && !['votes_like', 'votes_dislike'].includes(signal)) {
-                    // Step 6: Cooldown Dinâmico baseado na suspeição
-                    const finalCooldown = window.BotDetector.getDynamicCooldown(cooldownSeconds);
-                    window.BotDetector.reportState.adCooldowns[adHash] = Date.now() + (finalCooldown * 1000);
-                    startCooldownUI(finalCooldown);
+                    // Cooldown simples (sem multiplicador dinâmico)
+                    window.BotDetector.reportState.adCooldowns[adHash] = Date.now() + (cooldownSeconds * 1000);
+                    startCooldownUI(cooldownSeconds);
                 }
 
                 // === LOGICAL CONTRADICTIONS (Step 3 Beta 3) ===
@@ -708,66 +731,103 @@ window.UIModule = {
                                 // Tentar encontrar o label do botão que está a causar o conflito
                                 const conflictBtn = tooltip.querySelector(`.as-action-btn[data-signal="${activeConflict}"]`);
                                 const conflictLabel = conflictBtn ? conflictBtn.querySelector('.as-btn-label').innerText : activeConflict;
-                                
+
                                 this.showFeedback(tooltip, `Voto contraditório! Já votou em '${conflictLabel}'. Remova-o primeiro.`, 'error');
-                                
+
                                 // PENALIZAÇÃO: Tentativa de contradição
                                 if (window.TrustManager) {
                                     window.TrustManager.recordAction('contradiction');
                                 }
                                 return; // BLOQUEAR VOTO
                             }
-                        } catch (e) {}
+                        } catch (e) { }
+                    }
+                }
+
+                // === REGRAS SIMPLIFICADAS (User Request 2026-02-08) ===
+                // 1. Limite de 5 votos por user/anúncio
+                const savedVotes = JSON.parse(localStorage.getItem(`as_user_votes_${adHash}`) || '{}');
+                const userVoteCount = Object.keys(savedVotes).length;
+                const isNewVote = !savedVotes[signal];
+
+                if (isNewVote && userVoteCount >= 5) {
+                    this.showFeedback(tooltip, 'Máximo de 5 votos atingido!', 'error');
+                    return;
+                }
+
+                // 2. Cooldowns Fixos
+                // Vermelhos (Perigo): votes_advance_payment, votes_fake_item -> 5s
+                // Amarelos (Aviso): votes_no_response, votes_external_contact -> 3s
+                // Outros (Verde/Branco/Like/Dislike) -> 0s
+                let simplifiedCooldownSeconds = 0; // Renamed to avoid conflict with existing cooldownSeconds
+                if (['votes_advance_payment', 'votes_fake_item'].includes(signal)) {
+                    simplifiedCooldownSeconds = 5;
+                } else if (['votes_no_response', 'votes_external_contact'].includes(signal)) {
+                    simplifiedCooldownSeconds = 3;
+                }
+
+                // Se já estiver em cooldown (e for novo voto)
+                if (window.BotDetector && window.BotDetector.isCooldownActive(adHash) && isNewVote && simplifiedCooldownSeconds > 0) {
+                    const remaining = Math.ceil((window.BotDetector.reportState.adCooldowns[adHash] - Date.now()) / 1000);
+                    this.showFeedback(tooltip, `Aguarde ${remaining}s...`, 'warning');
+                    return;
+                }
+
+                // Aplica Cooldown
+                // Cooldown logic moved to finalizeVote to avoid race condition with validation
+
+                // === FIM REGRAS SIMPLIFICADAS ===
+
+                // === VALIDAÇÃO DE LIMITE (após resolver contextos e conflitos) ===
+                // Restaurado para garantir proteção contra bots (User Request)
+                if (window.BotDetector && adHash && !['votes_like', 'votes_dislike'].includes(signal)) {
+                    const check = window.BotDetector.canReport(adHash, signal);
+                    if (!check.allowed) {
+                        this.showFeedback(tooltip, check.reason, 'error');
+                        return;
                     }
                 }
 
                 // === CONTEXT SELECTOR (Step 5) ===
                 const contexts = JSON.parse(actionBtn.dataset.contexts || '[]');
-                
+
+                // Finalize Action (Simplificado e Otimista)
                 const finalizeVote = (context) => {
+                    // console.log('[Anti-Scam] finalizeVote START:', signal);
+
+                    // Aplica Cooldown (Agora sim, após validação)
+                    if (window.BotDetector && simplifiedCooldownSeconds > 0) {
+                        window.BotDetector.reportState.adCooldowns[adHash] = Date.now() + (simplifiedCooldownSeconds * 1000);
+                        this.initCooldownUI(tooltip, adHash);
+                    }
+
+                    // 1. UI Otimista (Imediata)
                     actionBtn.classList.add('active', 'as-voted-anim');
-                    
-                    // Atualizar contagem visual
-                    const countSpan = actionBtn.querySelector('.as-btn-count');
+
+                    // Atualiza contador visual
+                    const countSpan = actionBtn.querySelector('.as-btn-count'); // Changed from .as-stat-count to .as-btn-count to match existing code
                     if (countSpan) {
-                         const currentText = countSpan.innerText;
-                         const match = currentText.match(/(\d+)/);
-                         const oldVal = match ? parseInt(match[1]) : 0;
-                         countSpan.innerText = `${oldVal + 1} (...)`;
-                         countSpan.style.display = 'inline-block';
-                    }
-
-                    // Atualizar contador global VISUAL (Exceto Likes/Dislikes)
-                    if (!['votes_like', 'votes_dislike'].includes(signal)) {
-                        const userLimitEl = tooltip.querySelector('.as-user-limit-info b');
-                        if (userLimitEl) {
-                            let currentLimit = parseInt(userLimitEl.innerText || '0');
-                            userLimitEl.innerText = currentLimit + 1;
-                        }
-                    }
-
-                    // Guardar no localStorage
-                    if (adHash) {
                         try {
                             const savedVotes = JSON.parse(localStorage.getItem(`as_user_votes_${adHash}`) || '{}');
                             savedVotes[signal] = true;
                             localStorage.setItem(`as_user_votes_${adHash}`, JSON.stringify(savedVotes));
-                            
+
                             // Regista no BotDetector
-                            if (window.BotDetector) {
-                                window.BotDetector.registerVoteChange(adHash, 1, signal);
-                            }
-                        } catch (e) {}
+                            // REMOVIDO: A chamada agora é feita apenas via onReport no content.js para evitar contagem dupla (Bug Fix)
+                            // if (window.BotDetector) {
+                            //    window.BotDetector.registerVoteChange(adHash, 1, signal);
+                            // }
+                        } catch (e) { }
                     }
 
                     // Notificar content script
                     if (options.onReport) options.onReport(signal, 1, context);
-                    
+
                     // RECOMPENSA: Uso legítimo
                     if (window.TrustManager && !['votes_like', 'votes_dislike'].includes(signal)) {
                         window.TrustManager.recordAction('consistency');
                     }
-                    
+
                     this.showFeedback(tooltip, context ? `Voto registado: ${context}` : "Voto registado com sucesso!", 'success');
                 };
 
@@ -791,29 +851,63 @@ window.UIModule = {
 
                 const type = likeBtn ? 'votes_like' : 'votes_dislike';
                 const opposite = likeBtn ? 'votes_dislike' : 'votes_like';
+                const btn = likeBtn || dislikeBtn;
+                // FIX: Encontrar botão oposto via DOM (já que o evento só traz o clicado)
+                const container = btn.closest('.as-likes-container');
+                const oppositeBtn = likeBtn
+                    ? container.querySelector('.as-dislike-btn')
+                    : container.querySelector('.as-like-btn');
+
+                console.log('[Anti-Scam] Like/Dislike Clicked:', type);
+
                 const savedVotes = JSON.parse(localStorage.getItem(`as_user_votes_${adHash}`) || '{}');
                 const previousVote = savedVotes['votes_like'] ? 'votes_like' : (savedVotes['votes_dislike'] ? 'votes_dislike' : null);
-                
+
+                // Helper para atualizar visualmente
+                const updateVisual = (targetBtn, delta) => {
+                    const span = targetBtn.querySelector(targetBtn.classList.contains('as-like-btn') ? '.as-like-count' : '.as-dislike-count');
+                    if (span) {
+                        const val = parseInt(span.innerText) || 0;
+                        span.innerText = Math.max(0, val + delta);
+                    }
+                };
+
                 // Cenário 1: Remover voto (toggle)
                 if (previousVote === type) {
+                    console.log('[Anti-Scam] Removing vote:', type);
                     options.onReport(type, -1);
                     delete savedVotes[type];
                     localStorage.setItem(`as_user_votes_${adHash}`, JSON.stringify(savedVotes));
+
+                    // Optimistic UI
+                    btn.classList.remove('active', 'as-btn-voted');
+                    updateVisual(btn, -1);
+
                     this.showFeedback(tooltip, 'Voto removido.', 'neutral');
                     return;
                 }
 
-                // Cenário 2: Mudar voto (Swap) - REGRA DE OURO: 1 por anúncio
+                // Cenário 2: Mudar voto (Swap)
                 if (previousVote && previousVote !== type) {
+                    console.log('[Anti-Scam] Swapping vote from', previousVote, 'to', type);
                     options.onReport(previousVote, -1);
                     delete savedVotes[previousVote];
+
+                    // Optimistic UI (Remove old)
+                    oppositeBtn.classList.remove('active', 'as-btn-voted');
+                    updateVisual(oppositeBtn, -1);
                 }
 
                 // Cenário 3: Novo voto
+                console.log('[Anti-Scam] Adding vote:', type);
                 options.onReport(type, 1);
                 savedVotes[type] = true;
                 localStorage.setItem(`as_user_votes_${adHash}`, JSON.stringify(savedVotes));
-                
+
+                // Optimistic UI (Add new)
+                btn.classList.add('active', 'as-btn-voted');
+                updateVisual(btn, 1);
+
                 this.showFeedback(tooltip, type === 'votes_like' ? 'Gostaste!' : 'Não gostaste.', 'success');
                 return;
             }
@@ -828,29 +922,29 @@ window.UIModule = {
             const submitComment = async () => {
                 const text = commentInput.value.trim();
                 if (!text) return;
-                
+
                 if (text.length < 3) {
-                     this.showFeedback(tooltip, 'Comentário muito curto.', 'warning');
-                     return;
+                    this.showFeedback(tooltip, 'Comentário muito curto.', 'warning');
+                    return;
                 }
 
                 // Guardar comentário no storage
                 let adData = await window.StorageModule.getAdData(adHash);
                 if (!adData.comments) adData.comments = [];
-                
+
                 const newComment = {
                     text: text,
                     timestamp: Date.now(),
                     id: Math.random().toString(36).substr(2, 9)
                 };
-                
+
                 adData.comments.push(newComment);
                 await window.StorageModule.updateAdData(adHash, adData);
 
                 // Limpar e atualizar UI
                 commentInput.value = '';
                 commentsList.innerHTML = this.renderComments(adData.comments);
-                
+
                 // Atualizar contador
                 const countEl = tooltip.querySelector('.as-comments-count');
                 if (countEl) countEl.innerText = adData.comments.length;
@@ -859,7 +953,7 @@ window.UIModule = {
             };
 
             commentSubmit.onclick = submitComment;
-            
+
             // Permitir enviar com Enter
             commentInput.onkeypress = (e) => {
                 if (e.key === 'Enter') submitComment();
@@ -883,7 +977,7 @@ window.UIModule = {
 
         // Estilos Inline Forçados (Garante visibilidade)
         const baseStyle = 'padding: 12px 16px; border-radius: 8px; font-weight: 800; text-align: center; font-size: 13px; display: block; box-shadow: 0 4px 12px rgba(0,0,0,0.2); margin-bottom: 8px; animation: feedback-pop 0.3s ease;';
-        
+
         let typeStyle = '';
         if (type === 'error') typeStyle = 'background: #fef2f2; color: #b91c1c; border: 2px solid #ef4444;';
         else if (type === 'warning') typeStyle = 'background: #fffbeb; color: #92400e; border: 1px solid #f59e0b;';
@@ -916,7 +1010,7 @@ window.UIModule = {
         if (!feedbackArea) return;
 
         const label = btn.querySelector('.as-btn-label').innerText;
-        
+
         feedbackArea.innerHTML = `
             <div class="as-context-selector" style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px; margin-bottom: 12px; animation: slide-down 0.2s ease;">
                 <div style="font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 8px; text-transform: uppercase;">
@@ -958,29 +1052,29 @@ window.UIModule = {
      */
     renderButtons(buttons, cs, tabId = '') {
         if (!buttons || buttons.length === 0) return '<div style="grid-column:1/-1; color:#9ca3af; font-size:10px; text-align:center;">Nenhuma opção disponível.</div>';
-        
+
         // Usa o estado de expansão específico da aba ou false por padrão
         const isTabExpanded = this.expandedTabs[tabId] || false;
         const limit = isTabExpanded ? buttons.length : 6;
         let html = '';
-        
+
         // Calcular total para percentagens
         const totalVotes = cs.total_votes || 0;
-        
+
         // Recuperar votos locais do utilizador para marcar como "active"
         let localUserVotes = {};
         if (this.currentHash) {
             try {
                 localUserVotes = JSON.parse(localStorage.getItem(`as_user_votes_${this.currentHash}`) || '{}');
-            } catch (e) {}
+            } catch (e) { }
         }
-        
+
         buttons.forEach((btn, index) => {
             const count = cs[`${btn.signal}_raw`] || Math.round(cs[btn.signal] || 0);
             const rawCount = count;
             // Usa dados locais se disponíveis, senão tenta do objeto cs (para compatibilidade)
-            const userVoted = localUserVotes[btn.signal] || (cs.user_votes && cs.user_votes[btn.signal]); 
-            
+            const userVoted = localUserVotes[btn.signal] || (cs.user_votes && cs.user_votes[btn.signal]);
+
             const badgeContent = rawCount > 0 ? `${rawCount}` : '';
             const badgeStyle = rawCount > 0 ? '' : 'display:none';
 
@@ -990,7 +1084,7 @@ window.UIModule = {
             const hiddenClass = isHidden ? 'as-btn-hidden' : '';
 
             // Tooltip: Usa descrição detalhada se existir, senão usa label simples
-            const tooltipTitle = btn.description 
+            const tooltipTitle = btn.description
                 ? `${btn.label}\n─────────────\n${btn.description}\n(${rawCount} votos)`
                 : `${btn.label} (${rawCount} votos) - Clique para reportar`;
 
@@ -1008,8 +1102,8 @@ window.UIModule = {
         });
 
         if (buttons.length > 6) { // Mostra toggle se houver mais que o limite base (6)
-             const label = isTabExpanded ? `Ver menos opções ↑` : `Ver mais opções (${buttons.length - 6}) ↓`;
-             html += `<button class="as-view-more-link" data-tab="${tabId}" style="grid-column: 1 / -1; margin-top:8px; background:#f9fafb; border:1px solid #d1d5db; border-radius:4px; color:#374151; font-weight:700; font-size:11px; cursor:pointer; padding:8px; width:100%; transition:all 0.2s; text-align:center;">
+            const label = isTabExpanded ? `Ver menos opções ↑` : `Ver mais opções (${buttons.length - 6}) ↓`;
+            html += `<button class="as-view-more-link" data-tab="${tabId}" style="grid-column: 1 / -1; margin-top:8px; background:#f9fafb; border:1px solid #d1d5db; border-radius:4px; color:#374151; font-weight:700; font-size:11px; cursor:pointer; padding:8px; width:100%; transition:all 0.2s; text-align:center;">
                 ${label}
              </button>`;
         }
